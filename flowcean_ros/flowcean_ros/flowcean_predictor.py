@@ -28,18 +28,33 @@ import polars as pl
 import rclpy
 import yaml
 from builtin_interfaces.msg import Time
-from custom_transforms.particle_cloud_statistics import ParticleCloudStatistics
+from custom_transforms.collapse import Collapse
+from custom_transforms.zero_order_hold_matching import ZeroOrderHold
 from rclpy.node import Node
 from rclpy.qos import QoSPresetProfiles
 from std_msgs.msg import Float32MultiArray
-from flowcean.polars import MatchSamplingRate
+
+from flowcean.polars.transforms.drop import Drop
 
 
 class FlowceanPredictor(Node):
     def __init__(self) -> None:
         super().__init__("flowcean_predictor")
 
-        self.transform = ParticleCloudStatistics()  # update transforms
+        self.transform = (
+            # collapse map time series to a single value
+            Collapse("/map", element=0)
+            # align all time series features using zero-order hold
+            | ZeroOrderHold(
+                features=[
+                    "/scan",
+                    "/particle_cloud",
+                    "/amcl_pose",
+                ],
+                name="measurements",
+            )
+            | Drop("/scan", "/particle_cloud", "/amcl_pose")
+        )
 
         self.input_topic_config: dict[str, Any] = {}
         input_topics_yaml_path = (
