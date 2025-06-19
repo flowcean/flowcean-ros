@@ -21,7 +21,7 @@ setup(
     license='BSD 3-Clause "New" or "Revised" License',
     entry_points={
         "console_scripts": [
-            "data_preprocessor = flowcean_ros.data_preprocessor:main",
+            "flowcean_predictor = flowcean_ros.flowcean_predictor:main",
         ],
     },
 )

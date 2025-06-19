@@ -13,34 +13,20 @@ To be able to use the latest features of Flowcean, you need to clone the Flowcea
 Here are the exact steps to install the package:
 
 ```bash
+# clone flowcean_ros into your ROS 2 workspace
+mkdir -p ~/ros2_ws/src
 cd ~/ros2_ws/src
+git clone https://github.com/flowcean/flowcean-ros
+
+# clone flowcean to your desired location
+cd /your/path/to
 git clone https://github.com/flowcean/flowcean
-# create a virtual environment inside the flowcean_ros package
-cd flowcean/flowcean_ros
-uv venv --python=3.10
-source venv/bin/activate
-pip install -e ~/ros2_ws/src/flowcean
+
+# install flowcean system-wide
+python3.10 -m pip install /your/path/to/flowcean
 
 # build the package
 cd ~/ros2_ws
 colcon build --packages-select flowcean_ros
 source install/setup.bash # or setup.zsh
-```
-
-## Usage
-
-Specify which topics to subscribe to in `config/topic_info.yaml` file. Specify the transforms in the data_preprocessor.py file.
-
-If you make changes, don't forget to build the package and source the setup file:
-
-```bash
-cd ~/catkin_ws
-colcon build --packages-select flowcean_ros
-source install/setup.bash # or setup.zsh
-```
-
-Then run the following command to start the node:
-
-```bash
-ros2 run flowcean_ros flowcean_ros_node
 ```

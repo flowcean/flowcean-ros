@@ -12,13 +12,6 @@
     - "pose.pose.orientation.w"
   qos_profile: "SENSOR_DATA"
 
-"/momo/pose":
-  msg_type: "geometry_msgs.msg.PoseStamped"
-  fields:
-    - "pose.position.x"
-    - "pose.position.y"
-  qos_profile: "SENSOR_DATA"
-
 "/scan":
   msg_type: "sensor_msgs.msg.LaserScan"
   fields:
@@ -53,20 +46,3 @@
     - "particles"
   qos_profile: "SENSOR_DATA"
 
-"/delocalizations":
-  msg_type: "std_msgs.msg.Int16"
-  fields:
-    - "data"
-  qos_profile: "SENSOR_DATA"
-
-"/position_error":
-  msg_type: "std_msgs.msg.Float32"
-  fields:
-    - "data"
-  qos_profile: "SENSOR_DATA"
-
-"/heading_error":
-  msg_type: "std_msgs.msg.Float32"
-  fields:
-    - "data"
-  qos_profile: "SENSOR_DATA"

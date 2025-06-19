@@ -28,36 +28,31 @@ import polars as pl
 import rclpy
 import yaml
 from builtin_interfaces.msg import Time
-from custom_transforms.particle_cloud_image import ParticleCloudImage
 from custom_transforms.particle_cloud_statistics import ParticleCloudStatistics
-from custom_transforms.scan_map import ScanMap
 from rclpy.node import Node
 from rclpy.qos import QoSPresetProfiles
 from std_msgs.msg import Float32MultiArray
+from flowcean.polars import MatchSamplingRate
 
 
-class DataPreprocessor(Node):
+class FlowceanPredictor(Node):
     def __init__(self) -> None:
-        super().__init__("preprocessing_node")
-        self._init_config()
-        self._init_subscribers()
-        self._init_publisher()
-        self._init_timer()
+        super().__init__("flowcean_predictor")
 
-    def _init_config(self) -> None:
-        self.transform = (
-            ScanMap(plotting=False)
-            | ParticleCloudImage(save_images=False)
-            | ParticleCloudStatistics()
-        )
-        self.topic_config: dict[str, Any] = {}
-        config_file = (
+        self.transform = ParticleCloudStatistics()  # update transforms
+
+        self.input_topic_config: dict[str, Any] = {}
+        input_topics_yaml_path = (
             Path.home()
-            / "ros2_ws/src/flowcean/flowcean_ros/config/topic_info.yaml"
+            / "ros2_ws/src/flowcean-ros/flowcean_ros/config/input_topics.yaml"
         )
-        with Path.open(config_file) as f:
+        output_topics_yaml_path = (
+            Path.home()
+            / "ros2_ws/src/flowcean-ros/flowcean_ros/config/output_topics.yaml"
+        )
+        with Path.open(input_topics_yaml_path) as f:
             loaded_config = yaml.safe_load(f)
-            self.topic_config = (
+            self.input_topic_config = (
                 loaded_config if isinstance(loaded_config, dict) else {}
             )
         self.quality_of_service_mapping = {
@@ -65,17 +60,30 @@ class DataPreprocessor(Node):
             "PARAMETER_EVENTS": QoSPresetProfiles.PARAMETER_EVENTS.value,
             "SYSTEM_DEFAULT": QoSPresetProfiles.SYSTEM_DEFAULT.value,
         }
-        self.subscribers = {}
+        self.dict_of_subscribers = {}
+        self.dict_of_publishers = {}
         self.data_buffer: dict[str, list[dict]] = defaultdict(list)
-        self.max_buffer_size = 50
+        self.max_buffer_size = 1
         self.map_data = None
 
-    def _init_subscribers(self) -> None:
-        self.subscribers = {}
-        if isinstance(self.topic_config, dict):
-            for topic, config in self.topic_config.items():
+        with Path.open(output_topics_yaml_path) as f:
+            output_topics_config = yaml.safe_load(f)
+            if isinstance(output_topics_config, dict):
+                self.dict_of_publishers = {
+                    topic: self.create_publisher(
+                        Float32MultiArray,
+                        topic,
+                        self.quality_of_service_mapping[config["qos_profile"]],
+                    )
+                    for topic, config in output_topics_config.items()
+                }
+            else:
+                self.get_logger().error("No output topics found in config")
+
+        if isinstance(self.input_topic_config, dict):
+            for topic, config in self.input_topic_config.items():
                 msg_cls = self._get_msg_class(config["msg_type"])
-                self.subscribers[topic] = self.create_subscription(
+                self.dict_of_subscribers[topic] = self.create_subscription(
                     msg_cls,
                     topic,
                     lambda msg, topic=topic: self.callback(msg, topic),
@@ -87,20 +95,6 @@ class DataPreprocessor(Node):
     def _get_msg_class(self, msg_type: str) -> Any:
         module, cls = msg_type.rsplit(".", 1)
         return getattr(importlib.import_module(module), cls)
-
-    def _init_publisher(self) -> None:
-        self.preprocessed_publisher = self.create_publisher(
-            Float32MultiArray,
-            "/preprocessed_data",
-            10,
-        )
-
-    def _init_timer(self) -> None:
-        self.timer_period = 0.5
-        self.timer = self.create_timer(
-            self.timer_period,
-            self.apply_transforms,
-        )
 
     def _convert_ros_time(self, timestamp: Time) -> int:
         return timestamp.sec * 1_000_000_000 + timestamp.nanosec
@@ -120,22 +114,19 @@ class DataPreprocessor(Node):
             for part in parts:
                 value = value.get(part, {})
             # make sure this does not result in a pl.Object later
-            result[field] = (
-                list(value) if isinstance(value, Iterable) else value
-            )
+            result[field] = list(value) if isinstance(value, Iterable) else value
         return result
 
     def _handle_one_time_data(self, msg: Any, topic: str) -> None:
+        print("Handling one-time data for topic:", topic)
         msg_dict = self.ros_msg_to_dict(msg)
         value = {}
-        for field in self.topic_config[topic]["fields"]:
+        for field in self.input_topic_config[topic]["fields"]:
             parts = field.split(".")
             current = msg_dict
             for part in parts:
                 current = current.get(part, {})
-            value[field] = (
-                list(current) if isinstance(current, Iterable) else current
-            )
+            value[field] = list(current) if isinstance(current, Iterable) else current
         self.map_data = {
             "time": self.get_clock().now().to_msg(),
             "value": value,
@@ -143,13 +134,22 @@ class DataPreprocessor(Node):
 
     def callback(self, msg: Any, topic: str) -> None:
         try:
-            if self.topic_config[topic].get("one_time_data"):
+            if self.input_topic_config[topic].get("one_time_data"):
                 self._handle_one_time_data(msg, topic)
                 return
 
             msg_dict = self.ros_msg_to_dict(msg)
-            entry = self._create_entry(msg_dict, self.topic_config[topic])
+            entry = self._create_entry(msg_dict, self.input_topic_config[topic])
             self._update_buffer(topic, entry)
+            self.get_logger().debug(f"Received message for topic {topic}: {entry}")
+            if self._all_topics_received():
+                self.apply_transforms()
+            else:
+                self.get_logger().warn(
+                    f"Not all topics received yet. Current buffer size: "
+                    f"{len(self.data_buffer[topic])} for topic {topic}"
+                )
+
         except (AttributeError, ValueError) as e:
             self.get_logger().error(f"Error processing {topic}: {e!s}")
 
@@ -157,6 +157,13 @@ class DataPreprocessor(Node):
         self.data_buffer[topic].append(entry)
         if len(self.data_buffer[topic]) > self.max_buffer_size:
             self.data_buffer[topic].pop(0)
+
+    def _all_topics_received(self) -> bool:
+        """Check if all topics have received at least one message."""
+        return (
+            all(len(entries) > 0 for entries in self.data_buffer.values())
+            and self.map_data is not None
+        )
 
     def ros_msg_to_dict(self, msg: Any) -> dict:
         """Recursively convert ROS message to dict."""
@@ -190,8 +197,7 @@ class DataPreprocessor(Node):
             if not entries:
                 continue
             struct_list = [
-                {"time": entry["time"], "value": entry["value"]}
-                for entry in entries
+                {"time": entry["time"], "value": entry["value"]} for entry in entries
             ]
             df = pl.DataFrame({topic: [struct_list]}, strict=False)
             frames.append(df)
@@ -215,19 +221,21 @@ class DataPreprocessor(Node):
             )
             frames.append(df_map)
 
-        return (
-            pl.concat(frames, how="horizontal") if frames else pl.DataFrame()
-        )
+        return pl.concat(frames, how="horizontal") if frames else pl.DataFrame()
 
     def apply_transforms(self) -> None:
         dataset = self._prepare_dataset()
         if dataset.is_empty():
             self.get_logger().warn("No dataframe to process")
             return
-        print(dataset)
+        self.get_logger().info(f"Dataset prepared with columns: {dataset.columns}")
         # Check if all topics are present
-        if not all(topic in dataset.columns for topic in self.topic_config):
+        if not all(topic in dataset.columns for topic in self.input_topic_config):
             self.get_logger().warn("Not all topics present in dataframe")
+            self.get_logger().warn(
+                f"Expected topics: {list(self.input_topic_config.keys())}, "
+                f"found: {dataset.columns}",
+            )
             return
 
         transformed_dataset = self.transform(dataset.lazy())
@@ -236,7 +244,7 @@ class DataPreprocessor(Node):
 
 def main(args: list[str] | None = None) -> None:
     rclpy.init(args=args)
-    node = DataPreprocessor()
+    node = FlowceanPredictor()
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
