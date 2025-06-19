@@ -26,13 +26,13 @@ from typing import Any
 import numpy as np
 import polars as pl
 import rclpy
+import rospy
 import yaml
 from builtin_interfaces.msg import Time
 from custom_transforms.particle_cloud_statistics import ParticleCloudStatistics
 from rclpy.node import Node
 from rclpy.qos import QoSPresetProfiles
 from std_msgs.msg import Float32MultiArray
-from flowcean.polars import MatchSamplingRate
 
 
 class FlowceanPredictor(Node):
@@ -42,14 +42,9 @@ class FlowceanPredictor(Node):
         self.transform = ParticleCloudStatistics()  # update transforms
 
         self.input_topic_config: dict[str, Any] = {}
-        input_topics_yaml_path = (
-            Path.home()
-            / "ros2_ws/src/flowcean-ros/flowcean_ros/config/input_topics.yaml"
-        )
-        output_topics_yaml_path = (
-            Path.home()
-            / "ros2_ws/src/flowcean-ros/flowcean_ros/config/output_topics.yaml"
-        )
+        input_topics_yaml_path = self.get_parameter("input_info")
+        output_topics_yaml_path = self.get_parameter("output_info")
+        
         with Path.open(input_topics_yaml_path) as f:
             loaded_config = yaml.safe_load(f)
             self.input_topic_config = (
@@ -114,7 +109,9 @@ class FlowceanPredictor(Node):
             for part in parts:
                 value = value.get(part, {})
             # make sure this does not result in a pl.Object later
-            result[field] = list(value) if isinstance(value, Iterable) else value
+            result[field] = (
+                list(value) if isinstance(value, Iterable) else value
+            )
         return result
 
     def _handle_one_time_data(self, msg: Any, topic: str) -> None:
@@ -126,7 +123,9 @@ class FlowceanPredictor(Node):
             current = msg_dict
             for part in parts:
                 current = current.get(part, {})
-            value[field] = list(current) if isinstance(current, Iterable) else current
+            value[field] = (
+                list(current) if isinstance(current, Iterable) else current
+            )
         self.map_data = {
             "time": self.get_clock().now().to_msg(),
             "value": value,
@@ -139,15 +138,20 @@ class FlowceanPredictor(Node):
                 return
 
             msg_dict = self.ros_msg_to_dict(msg)
-            entry = self._create_entry(msg_dict, self.input_topic_config[topic])
+            entry = self._create_entry(
+                msg_dict,
+                self.input_topic_config[topic],
+            )
             self._update_buffer(topic, entry)
-            self.get_logger().debug(f"Received message for topic {topic}: {entry}")
+            self.get_logger().debug(
+                f"Received message for topic {topic}: {entry}",
+            )
             if self._all_topics_received():
                 self.apply_transforms()
             else:
                 self.get_logger().warn(
                     f"Not all topics received yet. Current buffer size: "
-                    f"{len(self.data_buffer[topic])} for topic {topic}"
+                    f"{len(self.data_buffer[topic])} for topic {topic}",
                 )
 
         except (AttributeError, ValueError) as e:
@@ -197,7 +201,8 @@ class FlowceanPredictor(Node):
             if not entries:
                 continue
             struct_list = [
-                {"time": entry["time"], "value": entry["value"]} for entry in entries
+                {"time": entry["time"], "value": entry["value"]}
+                for entry in entries
             ]
             df = pl.DataFrame({topic: [struct_list]}, strict=False)
             frames.append(df)
@@ -221,16 +226,22 @@ class FlowceanPredictor(Node):
             )
             frames.append(df_map)
 
-        return pl.concat(frames, how="horizontal") if frames else pl.DataFrame()
+        return (
+            pl.concat(frames, how="horizontal") if frames else pl.DataFrame()
+        )
 
     def apply_transforms(self) -> None:
         dataset = self._prepare_dataset()
         if dataset.is_empty():
             self.get_logger().warn("No dataframe to process")
             return
-        self.get_logger().info(f"Dataset prepared with columns: {dataset.columns}")
+        self.get_logger().info(
+            f"Dataset prepared with columns: {dataset.columns}",
+        )
         # Check if all topics are present
-        if not all(topic in dataset.columns for topic in self.input_topic_config):
+        if not all(
+            topic in dataset.columns for topic in self.input_topic_config
+        ):
             self.get_logger().warn("Not all topics present in dataframe")
             self.get_logger().warn(
                 f"Expected topics: {list(self.input_topic_config.keys())}, "
