@@ -1,7 +1,6 @@
 import os
 
 # flowcean imports
-
 from ament_index_python.packages import get_package_share_directory
 from geometry_msgs.msg import *
 from launch import LaunchDescription
@@ -31,11 +30,15 @@ def generate_launch_description():
                 executable="flowcean_predictor",
                 name="model_deployment",
                 parameters=[
-                    {"model_path": "/path/to/your/model.pkl"},
-                    {"model_name": "flowcean_model"},
-                    {"input_threshold": 1.0},
-                    {"input_info": input_info},
-                    {"output_info": output_info},
+                    {
+                        "input_threshold": 1.0,
+                    },  # number of seconds for how long topic data is considered up-to-date
+                    {
+                        "input_info": input_info,
+                    },  # yaml file with input topic information
+                    {
+                        "output_info": output_info,
+                    },  # yaml file with output topic information
                 ],
             ),
         ],

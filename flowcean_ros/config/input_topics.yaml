@@ -10,7 +10,9 @@
     - "pose.pose.orientation.y"
     - "pose.pose.orientation.z"
     - "pose.pose.orientation.w"
-  qos_profile: "SENSOR_DATA"
+  custom:
+    qos_profile: "SENSOR_DATA"
+    threshold: 1.0
 
 "/scan":
   msg_type: "sensor_msgs.msg.LaserScan"

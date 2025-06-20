@@ -20,13 +20,11 @@
 import importlib
 from collections import defaultdict
 from collections.abc import Iterable
-from pathlib import Path
 from typing import Any
 
 import numpy as np
 import polars as pl
 import rclpy
-import rospy
 import yaml
 from builtin_interfaces.msg import Time
 from custom_transforms.particle_cloud_statistics import ParticleCloudStatistics
@@ -42,50 +40,78 @@ class FlowceanPredictor(Node):
         self.transform = ParticleCloudStatistics()  # update transforms
 
         self.input_topic_config: dict[str, Any] = {}
-        input_topics_yaml_path = self.get_parameter("input_info")
-        output_topics_yaml_path = self.get_parameter("output_info")
-        
-        with Path.open(input_topics_yaml_path) as f:
-            loaded_config = yaml.safe_load(f)
-            self.input_topic_config = (
-                loaded_config if isinstance(loaded_config, dict) else {}
-            )
+        self.input_threshold: float = (
+            self.get_parameter("input_threshold")
+            .get_parameter_value()
+            .double_value
+        )
+        self.buffer_length: int = (
+            self.get_parameter("buffer_length")
+            .get_parameter_value()
+            .double_value
+        )
+
         self.quality_of_service_mapping = {
             "SENSOR_DATA": QoSPresetProfiles.SENSOR_DATA.value,
             "PARAMETER_EVENTS": QoSPresetProfiles.PARAMETER_EVENTS.value,
             "SYSTEM_DEFAULT": QoSPresetProfiles.SYSTEM_DEFAULT.value,
         }
-        self.dict_of_subscribers = {}
-        self.dict_of_publishers = {}
+
+        # Create subscribers for all input topics
+        subscriber_dict: dict = {}
+        for topic, config in self._read_config_file("input_info"):
+            subscriber_dict[topic] = self.create_subscription(
+                self._get_msg_class(config["msg_type"]),
+                topic,
+                lambda msg, topic=topic: self._callback(msg, topic),
+                self.quality_of_service_mapping[config["qos_profile"]],
+            )
+
+        publisher_dict: dict = {}
+        for topic, config in self._read_config_file("output_info"):
+            publisher_dict[topic] = self.create_publisher(
+                Float32MultiArray,
+                topic,
+                self.quality_of_service_mapping[config["qos_profile"]],
+            )
+
         self.data_buffer: dict[str, list[dict]] = defaultdict(list)
         self.max_buffer_size = 1
         self.map_data = None
 
-        with Path.open(output_topics_yaml_path) as f:
-            output_topics_config = yaml.safe_load(f)
-            if isinstance(output_topics_config, dict):
-                self.dict_of_publishers = {
-                    topic: self.create_publisher(
-                        Float32MultiArray,
-                        topic,
-                        self.quality_of_service_mapping[config["qos_profile"]],
-                    )
-                    for topic, config in output_topics_config.items()
-                }
-            else:
-                self.get_logger().error("No output topics found in config")
+    def _read_config_file(self, config_param: str) -> dict:
+        """Read configuration files."""
+        config_path = (
+            self.get_parameter(config_param).get_parameter_value().string_value
+        )
+        try:
+            with open(config_path) as f:
+                loaded_config = yaml.safe_load(f)
 
-        if isinstance(self.input_topic_config, dict):
-            for topic, config in self.input_topic_config.items():
-                msg_cls = self._get_msg_class(config["msg_type"])
-                self.dict_of_subscribers[topic] = self.create_subscription(
-                    msg_cls,
-                    topic,
-                    lambda msg, topic=topic: self.callback(msg, topic),
-                    self.quality_of_service_mapping[config["qos_profile"]],
-                )
-        else:
-            self.get_logger().error("No topics found in config")
+            if loaded_config is None or not isinstance(loaded_config, dict):
+                raise ValueError
+
+        except FileNotFoundError:
+            self.get_logger().error(
+                f"{config_param} file not found: {config_path}",
+            )
+            raise
+
+        except ValueError:
+            self.get_logger().error("Content error, not a dict")
+            raise
+
+        except yaml.YAMLError as e:
+            self.get_logger().error(f"YAML parsing error in config file: {e}")
+            raise
+
+        return loaded_config
+
+    def _detect_topics(self):
+        available_topics = rclpy.
+        for topic in self.topics_to_subscribe:
+
+        return True
 
     def _get_msg_class(self, msg_type: str) -> Any:
         module, cls = msg_type.rsplit(".", 1)
@@ -131,7 +157,7 @@ class FlowceanPredictor(Node):
             "value": value,
         }
 
-    def callback(self, msg: Any, topic: str) -> None:
+    def _callback(self, msg: Any, topic: str) -> None:
         try:
             if self.input_topic_config[topic].get("one_time_data"):
                 self._handle_one_time_data(msg, topic)
