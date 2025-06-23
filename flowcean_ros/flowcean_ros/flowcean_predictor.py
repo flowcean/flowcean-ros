@@ -41,14 +41,36 @@ class FlowceanPredictor(Node):
 
         self.input_topic_config: dict[str, Any] = {}
         self.input_threshold: float = (
-            self.get_parameter("input_threshold")
+            self.declare_parameter(
+                "input_threshold",
+                1.0,
+            )
             .get_parameter_value()
             .double_value
         )
         self.buffer_length: int = (
-            self.get_parameter("buffer_length")
+            self.declare_parameter(
+                "buffer_length",
+                1,
+            )
             .get_parameter_value()
-            .double_value
+            .integer_value
+        )
+        input_info_path: str = (
+            self.declare_parameter(
+                "input_info",
+                "config/input_topics.yaml",
+            )
+            .get_parameter_value()
+            .string_value
+        )
+        output_info_path: str = (
+            self.declare_parameter(
+                "output_info",
+                "config/output_topics.yaml",
+            )
+            .get_parameter_value()
+            .string_value
         )
 
         self.quality_of_service_mapping = {
@@ -59,16 +81,16 @@ class FlowceanPredictor(Node):
 
         # Create subscribers for all input topics
         subscriber_dict: dict = {}
-        for topic, config in self._read_config_file("input_info"):
+        for topic, config in self._read_config_file(input_info_path).items():
             subscriber_dict[topic] = self.create_subscription(
                 self._get_msg_class(config["msg_type"]),
                 topic,
                 lambda msg, topic=topic: self._callback(msg, topic),
-                self.quality_of_service_mapping[config["qos_profile"]],
+                self.quality_of_service_mapping[config["custom"]["qos_profile"]],
             )
 
         publisher_dict: dict = {}
-        for topic, config in self._read_config_file("output_info"):
+        for topic, config in self._read_config_file(output_info_path).items():
             publisher_dict[topic] = self.create_publisher(
                 Float32MultiArray,
                 topic,
@@ -79,11 +101,8 @@ class FlowceanPredictor(Node):
         self.max_buffer_size = 1
         self.map_data = None
 
-    def _read_config_file(self, config_param: str) -> dict:
+    def _read_config_file(self, config_path: str) -> dict:
         """Read configuration files."""
-        config_path = (
-            self.get_parameter(config_param).get_parameter_value().string_value
-        )
         try:
             with open(config_path) as f:
                 loaded_config = yaml.safe_load(f)
@@ -93,7 +112,7 @@ class FlowceanPredictor(Node):
 
         except FileNotFoundError:
             self.get_logger().error(
-                f"{config_param} file not found: {config_path}",
+                f"File not found: {config_path}",
             )
             raise
 
@@ -104,14 +123,14 @@ class FlowceanPredictor(Node):
         except yaml.YAMLError as e:
             self.get_logger().error(f"YAML parsing error in config file: {e}")
             raise
-
+        print(loaded_config)
         return loaded_config
 
-    def _detect_topics(self):
-        available_topics = rclpy.
-        for topic in self.topics_to_subscribe:
+    # def _detect_topics(self):
+    #     available_topics = rclpy.
+    #     for topic in self.topics_to_subscribe:
 
-        return True
+    #     return True
 
     def _get_msg_class(self, msg_type: str) -> Any:
         module, cls = msg_type.rsplit(".", 1)

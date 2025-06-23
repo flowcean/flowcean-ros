@@ -20,8 +20,6 @@ def generate_launch_description():
         "output_topics.yaml",
     )
 
-    model_transforms = []
-
     return LaunchDescription(
         [
             Node(
@@ -29,6 +27,7 @@ def generate_launch_description():
                 namespace="flowcean",
                 executable="flowcean_predictor",
                 name="model_deployment",
+                output="screen",
                 parameters=[
                     {
                         "input_threshold": 1.0,

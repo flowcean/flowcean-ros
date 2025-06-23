@@ -23,7 +23,9 @@
     - "angle_increment"
     - "range_min"
     - "range_max"
-  qos_profile: "SENSOR_DATA"
+  custom:
+    qos_profile: "SENSOR_DATA"
+    threshold: 1.0
 
 "/map":
   msg_type: "nav_msgs.msg.OccupancyGrid"
@@ -39,12 +41,16 @@
     - "info.origin.orientation.y"
     - "info.origin.orientation.z"
     - "info.origin.orientation.w"
-  qos_profile: "SYSTEM_DEFAULT"
+  custom:
+    qos_profile: "SENSOR_DATA"
+    threshold: 1.0
   one_time_data: true
 
 "/particle_cloud":
   msg_type: "nav2_msgs.msg.ParticleCloud"
   fields:
     - "particles"
-  qos_profile: "SENSOR_DATA"
+  custom:
+    qos_profile: "SENSOR_DATA"
+    threshold: 1.0
 
