@@ -25,6 +25,8 @@ git clone https://github.com/flowcean/flowcean
 # install flowcean system-wide
 python3.10 -m pip install /your/path/to/flowcean
 
+export PYTHONPATH="${PYTHONPATH}:/your/path/to/flowcean/examples/"
+
 # build the package
 cd ~/ros2_ws
 colcon build --packages-select flowcean_ros
