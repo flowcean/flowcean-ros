@@ -13,6 +13,8 @@
   <test_depend>python3-pytest</test_depend>
   <depend>rclpy</depend>
   <depend>std_msgs</depend>
+  <depend>nav2_msgs</depend>
+  <!-- <depend>sensor_msgs</depend> -->
   <depend>polars</depend>
   <depend>numpy</depend>
   <exec_depend>flowcean</exec_depend>

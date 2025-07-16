@@ -25,7 +25,17 @@ import polars as pl
 import rclpy
 import yaml
 from builtin_interfaces.msg import Time
+from custom_transforms.detect_delocalizations import (
+    DetectDelocalizations,
+)
+from custom_transforms.localization_status import LocalizationStatus
 from custom_transforms.particle_cloud_statistics import ParticleCloudStatistics
+from custom_transforms.slice_time_series import SliceTimeSeries
+from custom_transforms.zero_order_hold_matching import ZeroOrderHold
+from sensor_msgs.msg import LaserScan
+from nav2_msgs.msg import ParticleCloud
+from flowcean.core.transform import Lambda
+from flowcean.polars.transforms.drop import Drop
 from rclpy.node import Node
 from rclpy.qos import QoSPresetProfiles
 from rosidl_runtime_py.utilities import (
@@ -233,6 +243,7 @@ class FlowceanPredictor(Node):
                                     msg_class=msg_type,
                                     field=field,
                                 )
+                            print(msg_type)
                             msg_info.add_field(
                                 *self._get_fields_to_include(
                                     msg_type,
@@ -329,7 +340,6 @@ class FlowceanPredictor(Node):
 
         if not parent_name:
             parent_name = ""
-
         for field, field_type in msg.get_fields_and_field_types().items():
             if "/" not in field_type:
                 full_name = parent_name[1:] + "." + field
@@ -364,167 +374,66 @@ class FlowceanPredictor(Node):
         )
 
         if self.data_buffer.is_full():
-            observation: pl.DataFrame = self.transform(
-                self._generate_observation().lazy(),
-            )
-            print(f"transformed data: {observation}")
+            self.predict()
 
-            from flowcean.core.model import Model
+    def predict(self) -> None:
+        def generate_observation() -> pl.DataFrame:
+            """Generate observation from the data buffer."""
+            frames = []
+            for topic_name, msg_info in self.data_buffer.topic_data.items():
+                struct_list = [
+                    {"time": msg_info.timestamp, "value": msg_info.fields},
+                ]
+                frames.append(
+                    pl.DataFrame({topic_name: [struct_list]}, strict=False),
+                )
 
-            model = Model()
-            prediction = model.predict(observation)
-            # action = model.predict(observation)
-
-            self.data_buffer.clear()
-
-    def _generate_observation(self) -> pl.DataFrame:
-        frames = []
-        for topic_name, msg_info in self.data_buffer.topic_data.items():
-            struct_list = [
-                {"time": msg_info.timestamp, "value": msg_info.fields},
-            ]
-            frames.append(
-                pl.DataFrame({topic_name: [struct_list]}, strict=False),
+            return (
+                pl.concat(frames, how="horizontal")
+                if frames
+                else pl.DataFrame()
             )
 
-        return (
-            pl.concat(frames, how="horizontal") if frames else pl.DataFrame()
+        observation: pl.DataFrame = generate_observation()
+
+        data = (
+            observation
+            | Lambda(
+                lambda data: data.with_columns(
+                    pl.col("/map").struct.with_fields(
+                        pl.field("data").list.eval(pl.element() != 0),
+                    ),
+                ),
+            )
+            | ZeroOrderHold(
+                features=[
+                    "/scan",
+                    "/particle_cloud",
+                    "/momo/pose",
+                    "/amcl_pose",
+                ],
+                name="measurements",
+            )
+            | Drop("/scan", "/particle_cloud", "/momo/pose", "/amcl_pose")
+            # detect experiment slice points based on delocalization events
+            | DetectDelocalizations("/delocalizations", name="slice_points")
+            | Drop("/delocalizations")
+            | SliceTimeSeries(
+                time_series="measurements",
+                slice_points="slice_points",
+            )
+            | Drop("slice_points")
+            # detect localization status based on position and heading errors
+            | LocalizationStatus(
+                time_series="measurements",
+                ground_truth="/momo/pose",
+                estimation="/amcl_pose",
+                position_threshold=0.4,
+                heading_threshold=0.4,
+            )
         )
 
-    # def _convert_ros_time(self, timestamp: Time) -> int:
-    #     return timestamp.sec * 1_000_000_000 + timestamp.nanosec
-
-    # def _create_entry(self, msg_dict: dict, config: dict) -> dict:
-    #     return {
-    #         "time": self._convert_ros_time(self.get_clock().now().to_msg()),
-    #         "value": self._extract_fields(msg_dict, config["fields"]),
-    #     }
-
-    # def _extract_fields(self, msg_dict: dict, fields: list[str]) -> dict:
-    #     """Extract nested fields using dotted notation."""
-    #     result = {}
-    #     for field in fields:
-    #         parts = field.split(".")
-    #         value = msg_dict
-    #         for part in parts:
-    #             value = value.get(part, {})
-    #         # make sure this does not result in a pl.Object later
-    #         result[field] = (
-    #             list(value) if isinstance(value, Iterable) else value
-    #         )
-    #     return result
-
-    # def _handle_one_time_data(self, msg: Any, topic: str) -> None:
-    #     print("Handling one-time data for topic:", topic)
-    #     msg_dict = self.ros_msg_to_dict(msg)
-    #     value = {}
-    #     for field in self.input_topic_config[topic]["fields"]:
-    #         parts = field.split(".")
-    #         current = msg_dict
-    #         for part in parts:
-    #             current = current.get(part, {})
-    #         value[field] = (
-    #             list(current) if isinstance(current, Iterable) else current
-    #         )
-    #     self.map_data = {
-    #         "time": self.get_clock().now().to_msg(),
-    #         "value": value,
-    #     }
-
-    # def _update_buffer(self, topic: str, entry: dict) -> None:
-    #     self.data_buffer[topic].append(entry)
-    #     if len(self.data_buffer[topic]) > self.max_buffer_size:
-    #         self.data_buffer[topic].pop(0)
-
-    # def _all_topics_received(self) -> bool:
-    #     """Check if all topics have received at least one message."""
-    #     return (
-    #         all(len(entries) > 0 for entries in self.data_buffer.values())
-    #         and self.map_data is not None
-    #     )
-
-    # def ros_msg_to_dict(self, msg: Any) -> dict:
-    #     """Recursively convert ROS message to dict."""
-    #     result = {}
-    #     for field in msg.__slots__:
-    #         key = field.lstrip("_")
-    #         value = getattr(msg, field)
-    #         if hasattr(value, "__slots__"):  # Nested message
-    #             result[key] = self.ros_msg_to_dict(value)
-    #         elif isinstance(value, np.ndarray):
-    #             result[key] = value.tolist()
-    #         elif isinstance(value, list):
-    #             # Recursively convert list items if they are ROS messages
-    #             result[key] = [
-    #                 self.ros_msg_to_dict(item)
-    #                 if hasattr(item, "__slots__")
-    #                 else item.tolist()
-    #                 if hasattr(item, "tolist")
-    #                 else item
-    #                 for item in value
-    #             ]
-    #         else:
-    #             result[key] = value.item() if hasattr(value, "item") else value
-    #     return result
-
-    # def _prepare_dataset(self) -> pl.DataFrame:
-    #     """Prepare dataset with time series columns for each topic."""
-    #     frames = []
-
-    #     for topic, entries in self.data_buffer.items():
-    #         if not entries:
-    #             continue
-    #         struct_list = [
-    #             {"time": entry["time"], "value": entry["value"]}
-    #             for entry in entries
-    #         ]
-    #         df = pl.DataFrame({topic: [struct_list]}, strict=False)
-    #         frames.append(df)
-
-    #     # Add map data -> should be generalized later for all one-time data
-    #     if self.map_data:
-    #         df_map = pl.DataFrame(
-    #             {
-    #                 "/map": [
-    #                     [
-    #                         {
-    #                             "time": self._convert_ros_time(
-    #                                 self.map_data["time"],
-    #                             ),
-    #                             "value": self.map_data["value"],
-    #                         },
-    #                     ],
-    #                 ],
-    #             },
-    #             strict=False,
-    #         )
-    #         frames.append(df_map)
-
-    #     return (
-    #         pl.concat(frames, how="horizontal") if frames else pl.DataFrame()
-    #     )
-
-    # def apply_transforms(self) -> None:
-    #     dataset = self._prepare_dataset()
-    #     if dataset.is_empty():
-    #         self.get_logger().warn("No dataframe to process")
-    #         return
-    #     self.get_logger().info(
-    #         f"Dataset prepared with columns: {dataset.columns}",
-    #     )
-    #     # Check if all topics are present
-    #     if not all(
-    #         topic in dataset.columns for topic in self.input_topic_config
-    #     ):
-    #         self.get_logger().warn("Not all topics present in dataframe")
-    #         self.get_logger().warn(
-    #             f"Expected topics: {list(self.input_topic_config.keys())}, "
-    #             f"found: {dataset.columns}",
-    #         )
-    #         return
-
-    #     transformed_dataset = self.transform(dataset.lazy())
-    #     print(f"transformed data: {transformed_dataset.collect()}")
+        self.data_buffer.clear()
 
 
 def main(args: list[str] | None = None) -> None:

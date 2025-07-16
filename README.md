@@ -23,7 +23,7 @@ cd /your/path/to
 git clone https://github.com/flowcean/flowcean
 
 # install flowcean system-wide
-python3.10 -m pip install /your/path/to/flowcean
+python3.10 -m pip install /your/absolute/path/to/flowcean
 
 # build the package
 cd ~/ros2_ws
