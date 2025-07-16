@@ -2,23 +2,18 @@ import os
 
 # flowcean imports
 from ament_index_python.packages import get_package_share_directory
-from geometry_msgs.msg import *
 from launch import LaunchDescription
 from launch_ros.actions import Node
-from std_msgs.msg import *
 
 
-def generate_launch_description():
-    input_info = os.path.join(
+def generate_launch_description() -> LaunchDescription:
+    threshold = 0.1  # threshold in seconds for input to be considered valid
+    buffer_length = 10  # number of messages to buffer in the subscriber queue
+    topics_info = os.path.join(
         get_package_share_directory("flowcean_ros"),
         "config",
-        "input_topics.yaml",
-    )
-    output_info = os.path.join(
-        get_package_share_directory("flowcean_ros"),
-        "config",
-        "output_topics.yaml",
-    )
+        "topics_config.yaml",
+    )  # yaml file with input topic information
 
     return LaunchDescription(
         [
@@ -30,14 +25,14 @@ def generate_launch_description():
                 output="screen",
                 parameters=[
                     {
-                        "input_threshold": 1.0,
-                    },  # number of seconds for how long topic data is considered up-to-date
+                        "input_threshold": threshold,
+                    },
                     {
-                        "input_info": input_info,
-                    },  # yaml file with input topic information
+                        "buffer_length": buffer_length,
+                    },
                     {
-                        "output_info": output_info,
-                    },  # yaml file with output topic information
+                        "topics_info": topics_info,
+                    },
                 ],
             ),
         ],
