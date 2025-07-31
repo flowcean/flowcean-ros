@@ -1,5 +1,7 @@
 import os
 
+import launch_ros
+
 # flowcean imports
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
@@ -14,9 +16,25 @@ def generate_launch_description() -> LaunchDescription:
         "config",
         "topics_config.yaml",
     )  # yaml file with input topic information
+    model_path = os.path.join(
+        get_package_share_directory("flowcean_ros"),
+        "models",
+        "rec_20250704_173434_sliced.fml",
+    )
+    map_path = os.path.join(
+        get_package_share_directory("flowcean_ros"),
+        "maps",
+        "warehouse_slamtoolbox.pgm",
+    )
+    map_info_path = os.path.join(
+        get_package_share_directory("flowcean_ros"),
+        "maps",
+        "warehouse_slamtoolbox.yaml",
+    )
 
     return LaunchDescription(
         [
+            launch_ros.actions.SetParameter(name="use_sim_time", value=True),
             Node(
                 package="flowcean_ros",
                 namespace="flowcean",
@@ -32,6 +50,18 @@ def generate_launch_description() -> LaunchDescription:
                     },
                     {
                         "topics_info": topics_info,
+                    },
+                    {
+                        "model_path": model_path,
+                    },
+                    {
+                        "map_path": map_path,
+                    },
+                    {
+                        "map_info_path": map_info_path,
+                    },
+                    {
+                        "use_rosbag": True,
                     },
                 ],
             ),

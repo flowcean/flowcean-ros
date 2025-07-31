@@ -12,15 +12,27 @@ setup(
     data_files=[
         (
             os.path.join("share", package_name, "launch"),
-            glob("*.launch.py"),
-        ),
-        (
-            os.path.join("share", package_name, "launch"),
             glob(os.path.join("launch", "*.launch.py")),
         ),
         (
             os.path.join("share", package_name, "config"),
             glob(os.path.join("config", "*.yaml")),
+        ),
+        (
+            os.path.join("share", package_name, "models"),
+            glob(os.path.join("models", "*.pt")),
+        ),
+        (
+            os.path.join("share", package_name, "models"),
+            glob(os.path.join("models", "*.fml")),
+        ),
+        (
+            os.path.join("share", package_name, "maps"),
+            glob(os.path.join("maps", "*.pgm")),
+        ),
+        (
+            os.path.join("share", package_name, "maps"),
+            glob(os.path.join("maps", "*.yaml")),
         ),
         (
             "share/ament_index/resource_index/packages",

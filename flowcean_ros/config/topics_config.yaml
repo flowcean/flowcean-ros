@@ -29,36 +29,6 @@
 #   - qos_profile: "<profile_name>"  # QoS profile for the output topic
 
 input_topics:
-  "/map":
-    single_msg: true
-    qos_profile: "SENSOR_DATA"
-    threshold: 1.0
-  "/scan":
-    include:
-      - "ranges"
-      - "angle_min"
-      - "angle_max"
-      - "angle_increment"
-      - "range_min"
-      - "range_max"
-    qos_profile: "SENSOR_DATA"
-    threshold: 1.0
-  "/particle_cloud":
-    ingle_msg: true
-    exclude:
-      - "particles"
-    qos_profile: "SENSOR_DATA"
-    threshold: 1.0
-  "/momo/pose":
-    include:
-      - "pose.position.x"
-      - "pose.position.y"
-      - "pose.orientation.x"
-      - "pose.orientation.y"
-      - "pose.orientation.z"
-      - "pose.orientation.w"
-    qos_profile: "SENSOR_DATA"
-    threshold: 1.0
   "/amcl_pose":
     include:
       - "pose.pose.position.x"
@@ -69,14 +39,57 @@ input_topics:
       - "pose.pose.orientation.w"
     qos_profile: "SENSOR_DATA"
     threshold: 1.0
-  "/position_error":
+  # "/momo/pose":
+  #   include:
+  #     - "pose.position.x"
+  #     - "pose.position.y"
+  #     - "pose.orientation.x"
+  #     - "pose.orientation.y"
+  #     - "pose.orientation.z"
+  #     - "pose.orientation.w"
+  #   qos_profile: "SENSOR_DATA"
+  #   threshold: 1.0
+  "/scan":
+    include:
+      - "ranges"
+      - "angle_min"
+      - "angle_max"
+      - "angle_increment"
+      - "range_min"
+      - "range_max"
+    qos_profile: "SENSOR_DATA"
+    threshold: 1.0
+  "/map":
     include:
       - "data"
-  "/heading_error":
+      - "info.resolution"
+      - "info.width"
+      - "info.height"
+      - "info.origin.position.x"
+      - "info.origin.position.y"
+      - "info.origin.position.z"
+      - "info.origin.orientation.x"
+      - "info.origin.orientation.y"
+      - "info.origin.orientation.z"
+      - "info.origin.orientation.w"
     qos_profile: "SENSOR_DATA"
-  "/delocalizations":
     threshold: 1.0
-
+    one_time: True
+  # "/delocalizations":
+  #   include:
+  #     - "data"
+  "/particle_cloud":
+    include:
+      - "particles"
+    qos_profile: "SENSOR_DATA"
+    threshold: 1.0
+  # "/position_error":
+  #   include:
+  #     - "data"
+  # "/heading_error":
+  #   include:
+  #     - "data"
+    
 output_topics:
   "/output":
     msg_type: "std_msgs.msg.String"
