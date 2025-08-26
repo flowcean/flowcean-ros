@@ -19,6 +19,7 @@
 
 import collections.abc
 import importlib
+from enum import Enum
 import time
 from dataclasses import fields, is_dataclass
 from typing import Any
@@ -133,7 +134,6 @@ class FlowceanPredictor(Node):
     def __init__(self) -> None:
         super().__init__("flowcean_predictor")
 
-        self.input_topic_config: dict[str, Any] = {}
         self.input_threshold: float = (
             self.declare_parameter(
                 "input_threshold",
@@ -159,8 +159,6 @@ class FlowceanPredictor(Node):
             .get_parameter_value()
             .string_value
         )
-        self.image_size = 64
-        self.width_meters = 15
         self.model = Model.load(model_path)
 
         # Read topics configuration from YAML file

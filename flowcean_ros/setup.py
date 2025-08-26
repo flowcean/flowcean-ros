@@ -35,6 +35,10 @@ setup(
             glob(os.path.join("maps", "*.yaml")),
         ),
         (
+            os.path.join("lib", package_name, "core"),
+            glob(os.path.join("flowcean_ros/core", "*.py")),
+        ),
+        (
             "share/ament_index/resource_index/packages",
             ["resource/" + package_name],
         ),
@@ -49,6 +53,7 @@ setup(
     entry_points={
         "console_scripts": [
             "flowcean_predictor = flowcean_ros.flowcean_predictor:main",
+            "predictor_node = flowcean_ros.predictor_node:main",
         ],
     },
 )

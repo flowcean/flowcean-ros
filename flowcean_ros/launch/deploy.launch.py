@@ -38,7 +38,7 @@ def generate_launch_description() -> LaunchDescription:
             Node(
                 package="flowcean_ros",
                 namespace="flowcean",
-                executable="flowcean_predictor",
+                executable="predictor_node",
                 name="model_deployment",
                 output="screen",
                 parameters=[
@@ -55,13 +55,13 @@ def generate_launch_description() -> LaunchDescription:
                         "model_path": model_path,
                     },
                     {
-                        "map_path": map_path,
+                        "map_file": map_path,
                     },
                     {
-                        "map_info_path": map_info_path,
+                        "map_info_file": map_info_path,
                     },
                     {
-                        "use_rosbag": True,
+                        "use_map_file": True,
                     },
                 ],
             ),
