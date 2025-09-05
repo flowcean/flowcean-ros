@@ -99,4 +99,4 @@ ENV/
 .idea/
 
 models/*
-!models/test_model.fml
+!models/test_model.pt
