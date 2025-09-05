@@ -99,4 +99,5 @@ ENV/
 .idea/
 
 models/*
+models/rec_20250704_173434_sliced.fml
 !models/test_model.pt
