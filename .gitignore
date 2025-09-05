@@ -98,4 +98,5 @@ ENV/
 # PyCharm
 .idea/
 
-models/
+models/*
+!models/test_model.fml
