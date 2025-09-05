@@ -46,6 +46,7 @@ class Predictor(Node):
 
         time_start = time.time()
 
+        # handle input configuration
         to_subscribe = set(input_conf.keys())
         while len(to_subscribe) > 0:
             topics_and_types = dict(self.get_topic_names_and_types())
@@ -109,6 +110,8 @@ class Predictor(Node):
                 self.get_logger().warning(
                     f"Unavailable topics: {to_subscribe}",
                 )
+
+        # handle output configuration
 
     def _load_model(self) -> None:
         """ Load the Flowcean model from the specified path."""
@@ -252,6 +255,8 @@ class Predictor(Node):
     
     def predict(self) -> None:
         self.get_logger().info("  >>  Prediction...")
+
+        
 
 def get_msg_class(topic_name : str, type_name : str):
     if len(type_name) > 1:

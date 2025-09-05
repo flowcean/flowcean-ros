@@ -39,16 +39,6 @@ input_topics:
       - "pose.pose.orientation.w"
     qos_profile: "SENSOR_DATA"
     threshold: 1.0
-  # "/momo/pose":
-  #   include:
-  #     - "pose.position.x"
-  #     - "pose.position.y"
-  #     - "pose.orientation.x"
-  #     - "pose.orientation.y"
-  #     - "pose.orientation.z"
-  #     - "pose.orientation.w"
-  #   qos_profile: "SENSOR_DATA"
-  #   threshold: 1.0
   "/scan":
     include:
       - "ranges"
@@ -75,76 +65,13 @@ input_topics:
     qos_profile: "SENSOR_DATA"
     threshold: 1.0
     one_time: True
-  # "/delocalizations":
-  #   include:
-  #     - "data"
   "/particle_cloud":
     include:
       - "particles"
     qos_profile: "SENSOR_DATA"
     threshold: 1.0
-  # "/position_error":
-  #   include:
-  #     - "data"
-  # "/heading_error":
-  #   include:
-  #     - "data"
     
 output_topics:
   "/output":
     msg_type: "std_msgs.msg.String"
     qos_profile: "SENSOR_DATA"
-
-# "/amcl_pose":
-#   msg_type: "geometry_msgs.msg.PoseWithCovarianceStamped"
-#   fields:
-#     - "pose.pose.position.x"
-#     - "pose.pose.position.y"
-#     - "pose.pose.orientation.x"
-#     - "pose.pose.orientation.y"
-#     - "pose.pose.orientation.z"
-#     - "pose.pose.orientation.w"
-#   custom:
-#     qos_profile: "SENSOR_DATA"
-#     threshold: 1.0
-
-# "/scan":
-#   msg_type: "sensor_msgs.msg.LaserScan"
-#   fields:
-#     - "ranges"
-#     - "angle_min"
-#     - "angle_max"
-#     - "angle_increment"
-#     - "range_min"
-#     - "range_max"
-#   custom:
-#     qos_profile: "SENSOR_DATA"
-#     threshold: 1.0
-
-# "/map":
-#   msg_type: "nav_msgs.msg.OccupancyGrid"
-#   fields:
-#     - "data"
-#     - "info.resolution"
-#     - "info.width"
-#     - "info.height"
-#     - "info.origin.position.x"
-#     - "info.origin.position.y"
-#     - "info.origin.position.z"
-#     - "info.origin.orientation.x"
-#     - "info.origin.orientation.y"
-#     - "info.origin.orientation.z"
-#     - "info.origin.orientation.w"
-#   custom:
-#     qos_profile: "SENSOR_DATA"
-#     threshold: 1.0
-#   one_time_data: true
-
-# "/particle_cloud":
-#   msg_type: "nav2_msgs.msg.ParticleCloud"
-#   fields:
-#     - "particles"
-#   custom:
-#     qos_profile: "SENSOR_DATA"
-#     threshold: 1.0
-
