@@ -73,5 +73,14 @@ input_topics:
     
 output_topics:
   "/output":
-    msg_type: "std_msgs.msg.String"
+    type: "geometry.msg.pose"
+    map:
+      "pose.pose.position.x" : "next_x"  
+      "pose.pose.position.y" : "next_y"  
+      "pose.pose.orientation.x": "helper"  
+      "pose.pose.orientation.y": "helper"  
+      "pose.pose.orientation.z": "helper"  
+      "pose.pose.orientation.w": "helper"  
+      helper: [euler_to_quaternion", ["next_yaw"]]
     qos_profile: "SENSOR_DATA"
+    frequency: 0.1

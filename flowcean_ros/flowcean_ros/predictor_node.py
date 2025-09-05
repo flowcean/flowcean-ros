@@ -1,5 +1,5 @@
-import importlib
 import numpy as np
+from polars import DataFrame
 import rclpy
 import time
 from yaml import safe_load as yaml_safe_load
@@ -7,12 +7,13 @@ from rclpy.node import Node
 from rclpy.qos import QoSPresetProfiles
 from core.data_buffer import DataBuffer
 from core.msg_data import MsgData
+from core.logic import _unpack_to_dict, get_all_fields_of_class, get_msg_class, msg_has_field
+from publisher_logic import Publisher
 from nav_msgs.msg import OccupancyGrid
 from flowcean.core.model import Model
 from typing import Any
-from rosidl_runtime_py.utilities import (
-    get_message,
-)
+import polars as pl
+from transforms import get_transform
 
 
 _PRINT_FREQUENCY = 5.0  # seconds
@@ -112,6 +113,30 @@ class Predictor(Node):
                 )
 
         # handle output configuration
+        self.publishers : list[list] = []
+        for topic_name, t_info in output_conf:
+
+            msg_class = get_msg_class(
+                t_info["type"]   
+            )
+            assert (msg_has_field(msg_class, f) for f in t_info["map"]) 
+
+            ros_publisher = self.create_publisher(
+                msg_type=msg_class,
+                topic=topic_name,
+                qos_profile=QoSPresetProfiles[
+                    t_info.get("qos_profile", "SYSTEM_DEFAULT")
+                ],
+            )
+
+            self.publishers.append(
+                Publisher(
+                    msg_class=msg_class,
+                    topic_name=topic_name,
+                    ros_publisher=ros_publisher,
+                    map = t_info["map"]
+                )
+            )
 
     def _load_model(self) -> None:
         """ Load the Flowcean model from the specified path."""
@@ -250,66 +275,62 @@ class Predictor(Node):
         self.get_logger().debug(
             f"Stored message for topic {topic}",
         )
+
         if self.buffer.is_full():
             self.predict()
-    
+
+    def _generate_observation(self) -> DataFrame:
+        """
+        Transforms a Dataframe based on data in the buffer.
+        """
+
+        frames = []
+        for topic_name, msg_data in self.buffer.items():
+            fields, values = msg_data.items()
+
+            values = [_unpack_to_dict(v) for v in values]
+            df = pl.LazyFrame([values], schema=[*fields], orient="row")
+            time = pl.Series("time", [msg_data.get_stamp()]).cast(pl.Int64)
+            nest_into_timeseries = pl.struct(
+                [
+                    pl.col("time"),
+                    pl.struct(pl.exclude("time")).alias("value"),
+                ],
+            )
+            frames.append(
+                df.with_columns(time).select(
+                    nest_into_timeseries.implode().alias(topic_name),
+                ),
+            )
+
+        return (
+            DataFrame(pl.concat(frames, how="horizontal"))
+            if frames
+            else DataFrame()
+        )
+
     def predict(self) -> None:
         self.get_logger().info("  >>  Prediction...")
 
-        
+        observation: DataFrame = self._generate_observation()
 
-def get_msg_class(topic_name : str, type_name : str):
-    if len(type_name) > 1:
-        raise RuntimeError(
-            f"Multiple message types for topic {topic_name}: {type_name}",
+        transform = get_transform()
+        data = transform(observation.data)
+
+        output: pl.LazyFrame = self.model.predict(
+            data,
         )
-    # TODO: TEST IF I CAN USE THIS INSTEAD OF CODE BELOW   msg_class = get_message(type_name)
-    module, _msg, cls = type_name[0].rsplit("/", 2)
-    msg_class = getattr(
-        importlib.import_module(module + "." + _msg),
-        cls,
-    )
-    return msg_class
+        output = output.collect()   
 
-
-def get_all_fields_of_class(msg_class: Any, prefix="") -> list[str]:
-    all_fields = []
-    for field in msg_class.get_fields_and_field_types().keys():
-        field_value = getattr(msg_class, field)
-        full_name = f"{prefix}.{field}" if prefix else field
+        # TODO: CONVERT DATAFRAME TO A DICT
+        for publisher in self.publishers:            
+            publisher(output)
         
-        # Is field a ROS message class?
-        if hasattr(field_value, "__slots__"):
-            # Recursively process subfields
-            all_fields.extend(get_all_fields_of_class(field_value, full_name))
-        else:
-            # Base type, just add the full name
-            all_fields.append(full_name)
-    return all_fields
+        self.buffer.clear()
 
 
-def msg_has_field(msg_class: Any, field: str) -> bool:
-    """
-    Recursively checks if a field is part of a msg.
-    """
-    if "." in field:
-        field, nested_fields = field.split(".", 1)
-    else:
-        nested_fields = None
 
-    field_types = msg_class.get_fields_and_field_types()
-    if field not in field_types:
-        return False
 
-    if nested_fields is None:
-        return True
-
-    nested_msg_class = get_message(
-        field_types[field],
-    )
-    if nested_msg_class is None:
-        return False
-    return msg_has_field(nested_msg_class, nested_fields)
 
 
 def main(args: list[str] | None = None) -> None:
