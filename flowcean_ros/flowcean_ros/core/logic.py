@@ -18,13 +18,14 @@ def set_field_value_of_ros_msg(msg_instance : Any, field : str, value):
     setattr(target, fields[-1], value)
 
 
-def get_msg_class(topic_name : str, type_name : str):
-    if len(type_name) > 1:
+def get_msg_class(topic_name : str, type : list[str]):
+    if len(type) > 1:
         raise RuntimeError(
-            f"Multiple message types for topic {topic_name}: {type_name}",
+            f"Multiple message types for topic {topic_name}: {type}",
         )
     # TODO: TEST IF I CAN USE THIS INSTEAD OF CODE BELOW   msg_class = get_message(type_name)
-    module, _msg, cls = type_name[0].rsplit("/", 2)
+    
+    module, _msg, cls = type[0].rsplit("/", 2)
     msg_class = getattr(
         importlib.import_module(module + "." + _msg),
         cls,

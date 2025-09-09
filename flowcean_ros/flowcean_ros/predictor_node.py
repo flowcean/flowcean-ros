@@ -16,6 +16,7 @@ import polars as pl
 from flowcean_ros.transforms import get_transform
 
 
+
 _PRINT_FREQUENCY = 5.0  # seconds
 _QOSPROFILE_MAP = {
     "UNKNOWN": QoSPresetProfiles.UNKNOWN.value,
@@ -113,23 +114,24 @@ class Predictor(Node):
                 )
 
         # handle output configuration
-        self.publishers : list[list] = []
-        for topic_name, t_info in output_conf:
+        self._publishers : list = []
+        for topic_name, t_info in output_conf.items():
 
             msg_class = get_msg_class(
-                t_info["type"]   
+                topic_name,
+                [t_info["type"]]   
             )
             assert (msg_has_field(msg_class, f) for f in t_info["map"]) 
 
             ros_publisher = self.create_publisher(
                 msg_type=msg_class,
                 topic=topic_name,
-                qos_profile=QoSPresetProfiles[
+                qos_profile=_QOSPROFILE_MAP[
                     t_info.get("qos_profile", "SYSTEM_DEFAULT")
                 ],
             )
 
-            self.publishers.append(
+            self._publishers.append(
                 Publisher(
                     msg_class=msg_class,
                     topic_name=topic_name,
@@ -287,8 +289,9 @@ class Predictor(Node):
         frames = []
         for topic_name, msg_data in self.buffer.items():
             fields, values = msg_data.items()
-
+            print("v in msg_data", values)
             values = [_unpack_to_dict(v) for v in values]
+            print(values)
             df = pl.LazyFrame([values], schema=[*fields], orient="row")
             time = pl.Series("time", [msg_data.get_stamp()]).cast(pl.Int64)
             nest_into_timeseries = pl.struct(
@@ -323,7 +326,7 @@ class Predictor(Node):
         output = output.collect()   
 
         # TODO: CONVERT DATAFRAME TO A DICT
-        for publisher in self.publishers:            
+        for publisher in self._publishers:            
             publisher(output)
         
         self.buffer.clear()

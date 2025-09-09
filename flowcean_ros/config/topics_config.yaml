@@ -29,58 +29,39 @@
 #   - qos_profile: "<profile_name>"  # QoS profile for the output topic
 
 input_topics:
-  "/amcl_pose":
+  "/turtle1/cmd_vel":
     include:
-      - "pose.pose.position.x"
-      - "pose.pose.position.y"
-      - "pose.pose.orientation.x"
-      - "pose.pose.orientation.y"
-      - "pose.pose.orientation.z"
-      - "pose.pose.orientation.w"
+      - "linear.x"
+      - "angular.z"
     qos_profile: "SENSOR_DATA"
     threshold: 1.0
-  "/scan":
+  "/turtle1/pose":
     include:
-      - "ranges"
-      - "angle_min"
-      - "angle_max"
-      - "angle_increment"
-      - "range_min"
-      - "range_max"
-    qos_profile: "SENSOR_DATA"
-    threshold: 1.0
-  "/map":
-    include:
-      - "data"
-      - "info.resolution"
-      - "info.width"
-      - "info.height"
-      - "info.origin.position.x"
-      - "info.origin.position.y"
-      - "info.origin.position.z"
-      - "info.origin.orientation.x"
-      - "info.origin.orientation.y"
-      - "info.origin.orientation.z"
-      - "info.origin.orientation.w"
-    qos_profile: "SENSOR_DATA"
-    threshold: 1.0
-    one_time: True
-  "/particle_cloud":
-    include:
-      - "particles"
+      - "x"
+      - "y"
+      - "theta"
     qos_profile: "SENSOR_DATA"
     threshold: 1.0
     
 output_topics:
   "/output":
-    type: "geometry.msg.pose"
+    type: "turtlesim/msg/Pose"
     map:
-      "pose.pose.position.x" : "next_x"  
-      "pose.pose.position.y" : "next_y"  
-      "pose.pose.orientation.x": "helper"  
-      "pose.pose.orientation.y": "helper"  
-      "pose.pose.orientation.z": "helper"  
-      "pose.pose.orientation.w": "helper"  
-      helper: [euler_to_quaternion", ["next_yaw"]]
+      "x" : "x_next"  
+      "y" : "y_next"  
+      "theta" : "theta_next"
     qos_profile: "SENSOR_DATA"
     frequency: 0.1
+# output_topics:
+#   "/output":
+#     type: "geometry.msg.pose"
+#     map:
+#       "pose.pose.position.x" : "x_next"  
+#       "pose.pose.position.y" : "y_next"  
+#       "pose.pose.orientation.x": "helper"  
+#       "pose.pose.orientation.y": "helper"  
+#       "pose.pose.orientation.z": "helper"  
+#       "pose.pose.orientation.w": "helper"  
+#       helper: [euler_to_quaternion", ["next_yaw"]]
+#     qos_profile: "SENSOR_DATA"
+#     frequency: 0.1
