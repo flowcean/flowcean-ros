@@ -8,12 +8,12 @@ from rclpy.qos import QoSPresetProfiles
 from core.data_buffer import DataBuffer
 from core.msg_data import MsgData
 from core.logic import _unpack_to_dict, get_all_fields_of_class, get_msg_class, msg_has_field
-from publisher_logic import Publisher
+from flowcean_ros.publisher_logic import Publisher
 from nav_msgs.msg import OccupancyGrid
 from flowcean.core.model import Model
 from typing import Any
 import polars as pl
-from transforms import get_transform
+from flowcean_ros.transforms import get_transform
 
 
 _PRINT_FREQUENCY = 5.0  # seconds
