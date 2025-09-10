@@ -1,7 +1,6 @@
 
 from flowcean.core import Transform
 
-# TODO: FIX IMPORTS LIKE MARKUS HAS
 from flowcean.polars.transforms.explode_time_series import ExplodeTimeSeries
 from flowcean.polars.transforms.zero_order_hold_matching import ZeroOrderHold
 
@@ -14,10 +13,21 @@ def turtle_transforms() -> Transform:
     return (
         ZeroOrderHold(
             features=[
-                "/turtle1/cmd_vel",
-                "/turtle1/pose",
+                "linear.x",
+                "angular.z",
+                "x",
+                "y",
+                "theta",
             ],
             name="measurements",
         )
-        | ExplodeTimeSeries("measurements")
+        # | ExplodeTimeSeries("measurements")
+        # ZeroOrderHold(
+            # features=[
+                # "/turtle1/cmd_vel",
+                # "/turtle1/pose",
+            # ],
+            # name="measurements",
+        # )
+        # | ExplodeTimeSeries("measurements")
     )

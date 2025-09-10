@@ -1,5 +1,6 @@
 import numpy as np
-from polars import DataFrame
+# from polars import DataFrame, LazyFrame
+from flowcean.polars import DataFrame
 import rclpy
 import time
 from yaml import safe_load as yaml_safe_load
@@ -45,6 +46,8 @@ class Predictor(Node):
         buf_len = self.get_parameter("buffer_length").get_parameter_value().integer_value
         self.buffer = DataBuffer(length=buf_len)
         input_conf, output_conf = self._load_topics_config()
+        self.model = self._load_model()
+
 
         time_start = time.time()
 
@@ -140,14 +143,14 @@ class Predictor(Node):
                 )
             )
 
-    def _load_model(self) -> None:
+    def _load_model(self) -> Model:
         """ Load the Flowcean model from the specified path."""
         
         path = self.get_parameter("model_path").get_parameter_value().string_value
         if not path:
             raise ValueError("Model path cannot be empty.")
         
-        self.model = Model.load(path)
+        return Model.load(path)
  
     def _load_topics_config(self) -> tuple[dict, dict]:
         """ Read input and output configuration from YAML file."""
@@ -265,8 +268,8 @@ class Predictor(Node):
         return True
     
     def _callback_to_store_msg(self, msg: Any, topic: str) -> None:
-        msg_info: MsgData = self.buffer.get(topic, None)
-        if msg_info.is_single and msg_info.data_complete():
+        msg_data: MsgData = self.buffer.get(topic, None)
+        if msg_data.is_single and msg_data.data_complete():
             return
 
         self.buffer.store(
@@ -281,44 +284,51 @@ class Predictor(Node):
         if self.buffer.is_full():
             self.predict()
 
-    def _generate_observation(self) -> DataFrame:
+    def _generate_observation(self) -> pl.DataFrame:
         """
         Transforms a Dataframe based on data in the buffer.
         """
 
         frames = []
+        print("buffer content: ", self.buffer.items())
         for topic_name, msg_data in self.buffer.items():
-            fields, values = msg_data.items()
-            print("v in msg_data", values)
+            
+            fields, values = msg_data.keys(), msg_data.values() # HERE msg_data.items() gives fields and values wrongly
+            
             values = [_unpack_to_dict(v) for v in values]
-            print(values)
-            df = pl.LazyFrame([values], schema=[*fields], orient="row")
-            time = pl.Series("time", [msg_data.get_stamp()]).cast(pl.Int64)
-            nest_into_timeseries = pl.struct(
-                [
-                    pl.col("time"),
-                    pl.struct(pl.exclude("time")).alias("value"),
-                ],
-            )
-            frames.append(
-                df.with_columns(time).select(
-                    nest_into_timeseries.implode().alias(topic_name),
-                ),
-            )
+            
+            print("fields", fields)
+            print("values", values)
+            
+            df = pl.DataFrame([values], schema=[*fields], orient="row")
+            # time = pl.Series("time", [msg_data.get_stamp()]).cast(pl.Int64)
+            # nest_into_timeseries = pl.struct(
+            #     [
+            #         pl.col("time"),
+            #         pl.struct(pl.exclude("time")).alias("value"),
+            #     ],
+            # )
+            # df = df.with_columns(time).select(
+            #     nest_into_timeseries.implode().alias(topic_name),
+            # )
+            print(df)
+            frames.append(df)
+            
 
         return (
-            DataFrame(pl.concat(frames, how="horizontal"))
+            pl.DataFrame(pl.concat(frames, how="horizontal"))
             if frames
-            else DataFrame()
+            else pl.DataFrame()
         )
 
     def predict(self) -> None:
         self.get_logger().info("  >>  Prediction...")
 
         observation: DataFrame = self._generate_observation()
+        print(observation.collect_schema())
 
         transform = get_transform()
-        data = transform(observation.data)
+        data = transform(observation)
 
         output: pl.LazyFrame = self.model.predict(
             data,
