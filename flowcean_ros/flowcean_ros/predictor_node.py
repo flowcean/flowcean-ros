@@ -1,15 +1,14 @@
 import numpy as np
-# from polars import DataFrame, LazyFrame
-from flowcean.polars import DataFrame
 import rclpy
 import time
 from yaml import safe_load as yaml_safe_load
 from rclpy.node import Node
 from rclpy.qos import QoSPresetProfiles
+from rclpy.publisher import Publisher
 from core.data_buffer import DataBuffer
 from core.msg_data import MsgData
 from core.logic import _unpack_to_dict, get_all_fields_of_class, get_msg_class, msg_has_field
-from flowcean_ros.publisher_logic import Publisher
+from flowcean_ros.publisher_logic import PublisherInfo
 from nav_msgs.msg import OccupancyGrid
 from flowcean.core.model import Model
 from typing import Any
@@ -117,7 +116,8 @@ class Predictor(Node):
                 )
 
         # handle output configuration
-        self._publishers : list = []
+        self.test_publishers : list[PublisherInfo] = []
+        self._publisher_dict : dict[PublisherInfo, Publisher] = {}
         for topic_name, t_info in output_conf.items():
 
             msg_class = get_msg_class(
@@ -133,15 +133,14 @@ class Predictor(Node):
                     t_info.get("qos_profile", "SYSTEM_DEFAULT")
                 ],
             )
-
-            self._publishers.append(
-                Publisher(
-                    msg_class=msg_class,
-                    topic_name=topic_name,
-                    ros_publisher=ros_publisher,
-                    map = t_info["map"]
+            publisher_info = PublisherInfo(
+                msg_class=msg_class,
+                topic_name=topic_name,
+                map = t_info["map"]
                 )
-            )
+            
+            self._publisher_dict[publisher_info] = ros_publisher
+
 
     def _load_model(self) -> Model:
         """ Load the Flowcean model from the specified path."""
@@ -290,56 +289,47 @@ class Predictor(Node):
         """
 
         frames = []
-        print("buffer content: ", self.buffer.items())
         for topic_name, msg_data in self.buffer.items():
             
             fields, values = msg_data.keys(), msg_data.values() # HERE msg_data.items() gives fields and values wrongly
             
             values = [_unpack_to_dict(v) for v in values]
-            
-            print("fields", fields)
-            print("values", values)
-            
-            df = pl.DataFrame([values], schema=[*fields], orient="row")
-            # time = pl.Series("time", [msg_data.get_stamp()]).cast(pl.Int64)
-            # nest_into_timeseries = pl.struct(
-            #     [
-            #         pl.col("time"),
-            #         pl.struct(pl.exclude("time")).alias("value"),
-            #     ],
-            # )
-            # df = df.with_columns(time).select(
-            #     nest_into_timeseries.implode().alias(topic_name),
-            # )
-            print(df)
+            df = pl.LazyFrame([values], schema=fields, orient="row")
+            time = pl.Series("time", [msg_data.get_stamp()]).cast(pl.Int64)
+            nest_into_timeseries = pl.struct(
+                [
+                    pl.col("time"),
+                    pl.struct(pl.exclude("time")).alias("value"),
+                ],
+            )
+            df = df.with_columns(time).select(
+                nest_into_timeseries.implode().alias(topic_name),
+            )
             frames.append(df)
-            
 
         return (
-            pl.DataFrame(pl.concat(frames, how="horizontal"))
+            pl.concat(frames, how="horizontal")
             if frames
-            else pl.DataFrame()
+            else pl.LazyFrame()
         )
 
     def predict(self) -> None:
         self.get_logger().info("  >>  Prediction...")
 
-        observation: DataFrame = self._generate_observation()
-        print(observation.collect_schema())
+        observation: pl.LazyFrame = self._generate_observation()
 
         transform = get_transform()
         data = transform(observation)
-
         output: pl.LazyFrame = self.model.predict(
             data,
         )
-        output = output.collect()   
-
-        # TODO: CONVERT DATAFRAME TO A DICT
-        for publisher in self._publishers:            
-            publisher(output)
+        output = output.collect().to_dict(as_series=False)
         
-        self.buffer.clear()
+
+        for info, publisher in self._publisher_dict.items():
+            msg = info.convert(output)
+            publisher.publish(msg)
+        self.buffer.empty()
 
 
 

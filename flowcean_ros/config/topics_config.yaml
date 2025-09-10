@@ -47,9 +47,9 @@ output_topics:
   "/output":
     type: "turtlesim/msg/Pose"
     map:
-      "x" : "x_next"  
-      "y" : "y_next"  
-      "theta" : "theta_next"
+      "x" : "/turtle1/pose/x_next"  
+      "y" : "/turtle1/pose/y_next"  
+      "theta" : "/turtle1/pose/theta_next"
     qos_profile: "SENSOR_DATA"
     frequency: 0.1
 # output_topics:

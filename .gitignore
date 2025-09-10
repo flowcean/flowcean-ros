@@ -98,5 +98,5 @@ ENV/
 # PyCharm
 .idea/
 
-flowcean_ros/models/*
-!flowcean_ros/models/test_model.pt
+# flowcean_ros/models/*
+# !flowcean_ros/models/test_model.pt

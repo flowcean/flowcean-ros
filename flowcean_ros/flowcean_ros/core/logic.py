@@ -6,8 +6,8 @@ import inspect
 import collections.abc
 import numpy as np
 
-def set_field_value_of_ros_msg(msg_instance : Any, field : str, value):
-    fields = field(".")
+def set_field_value_of_ros_msg(msg_instance : Any, field : str, value : Any):
+    fields = field.split(".")
     target = msg_instance
     
     # Walk down the attributes except the last one
@@ -75,14 +75,6 @@ def msg_has_field(msg_class: Any, field: str) -> bool:
 def _unpack_to_dict(obj: object) -> object:
     if isinstance(obj, (tuple, list)):
         return type(obj)(_unpack_to_dict(item) for item in obj)
-    if hasattr(obj, "__slots__") and hasattr(
-        obj,
-        "get_fields_and_field_types",
-    ):
-        return {
-            f: _unpack_to_dict(getattr(obj, f))
-            for f in obj.get_fields_and_field_types()
-        }
     if is_dataclass(obj) and not isinstance(obj, type):
         return {
             f.name: _unpack_to_dict(getattr(obj, f.name))
@@ -90,11 +82,9 @@ def _unpack_to_dict(obj: object) -> object:
             if f.name != "__msgtype__"
         }
     if isinstance(obj, np.ndarray):
-        obj = obj.astype(np.float32, copy=False)
         return obj.tolist()
-    if isinstance(obj, collections.abc.Sequence):
-        return list(obj)
     return obj
+
 
 
 def helper_function(func):

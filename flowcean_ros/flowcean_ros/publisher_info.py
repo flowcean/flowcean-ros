@@ -4,13 +4,12 @@ from rclpy.publisher import Publisher as ROSPublisher
 from typing import Any
 from core.logic import set_field_value_of_ros_msg
 
-class Publisher():
+class PublisherInfo:
 
-    def __init__(self, msg_class : Any, topic_name : str, ros_publisher : ROSPublisher, map : dict):
-        self._topic_name = topic_name
-        self._ros_publisher = ros_publisher
-        self._map = map
+    def __init__(self, msg_class : Any, topic_name : str, map : dict):
         self._msg_type = msg_class
+        self._topic_name = topic_name
+        self._map = map
         
         self._helper_conf = None
         if self._map.get("helper", None) is not None:
@@ -24,7 +23,7 @@ class Publisher():
             )
 
     
-    def __call__(self, data : dict[str, Any]):
+    def convert(self, data : dict[str, Any]):
         """
         publish a ROS message based on input data
         """
@@ -37,10 +36,9 @@ class Publisher():
             output_values = list(fun(input_values))
 
         for field, column in self._map.items():
-            if value != "helper":
-                value = data[column]
+            if column != "helper":
+                value = data[column][0]
             else:
                 value = output_values.pop(0)
             set_field_value_of_ros_msg(msg, field, value)            
-
-        self._ros_publisher.publish(msg)
+        return msg

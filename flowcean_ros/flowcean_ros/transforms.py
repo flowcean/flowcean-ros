@@ -13,15 +13,12 @@ def turtle_transforms() -> Transform:
     return (
         ZeroOrderHold(
             features=[
-                "linear.x",
-                "angular.z",
-                "x",
-                "y",
-                "theta",
+                "/turtle1/cmd_vel",
+                "/turtle1/pose",
             ],
             name="measurements",
         )
-        # | ExplodeTimeSeries("measurements")
+        | ExplodeTimeSeries("measurements")
         # ZeroOrderHold(
             # features=[
                 # "/turtle1/cmd_vel",

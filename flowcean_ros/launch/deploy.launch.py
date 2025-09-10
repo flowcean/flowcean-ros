@@ -19,7 +19,7 @@ def generate_launch_description() -> LaunchDescription:
     model_path = os.path.join(
         get_package_share_directory("flowcean_ros"),
         "models",
-        "rec_20250704_173434_sliced.fml",
+        "model.fml",
     )
     map_path = os.path.join(
         get_package_share_directory("flowcean_ros"),
