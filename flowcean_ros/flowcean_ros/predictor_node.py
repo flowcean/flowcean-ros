@@ -8,7 +8,7 @@ from rclpy.publisher import Publisher
 from core.data_buffer import DataBuffer
 from core.msg_data import MsgData
 from core.logic import _unpack_to_dict, get_all_fields_of_class, get_msg_class, msg_has_field
-from flowcean_ros.publisher_logic import PublisherInfo
+from flowcean_ros.publisher_info import PublisherInfo
 from nav_msgs.msg import OccupancyGrid
 from flowcean.core.model import Model
 from typing import Any
