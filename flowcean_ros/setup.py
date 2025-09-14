@@ -52,7 +52,6 @@ setup(
     license='BSD 3-Clause "New" or "Revised" License',
     entry_points={
         "console_scripts": [
-            "flowcean_predictor = flowcean_ros.flowcean_predictor:main",
             "predictor_node = flowcean_ros.predictor_node:main",
         ],
     },

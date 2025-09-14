@@ -30,3 +30,11 @@ cd ~/ros2_ws
 colcon build --packages-select flowcean_ros
 source install/setup.bash # or setup.zsh
 ```
+
+## launch the node
+
+To launch the predictor node, you can use the following command:
+
+```bash
+ros2 launch flowcean_ros deploy.launch.py
+```

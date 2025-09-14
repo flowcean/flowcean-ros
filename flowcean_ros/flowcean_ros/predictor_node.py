@@ -1,21 +1,26 @@
-import numpy as np
-import rclpy
 import time
-from yaml import safe_load as yaml_safe_load
-from rclpy.node import Node
-from rclpy.qos import QoSPresetProfiles
-from rclpy.publisher import Publisher
-from core.data_buffer import DataBuffer
-from core.msg_data import MsgData
-from core.logic import _unpack_to_dict, get_all_fields_of_class, get_msg_class, msg_has_field
-from flowcean_ros.publisher_info import PublisherInfo
-from nav_msgs.msg import OccupancyGrid
-from flowcean.core.model import Model
 from typing import Any
+
+import numpy as np
 import polars as pl
+import rclpy
+from core.data_buffer import DataBuffer
+from core.logic import (
+    _unpack_to_dict,
+    get_all_fields_of_class,
+    get_msg_class,
+    msg_has_field,
+)
+from core.msg_data import MsgData
+from nav_msgs.msg import OccupancyGrid
+from rclpy.node import Node
+from rclpy.publisher import Publisher
+from rclpy.qos import QoSPresetProfiles
+from yaml import safe_load as yaml_safe_load
+
+from flowcean.core.model import Model
+from flowcean_ros.publisher_info import PublisherInfo
 from flowcean_ros.transforms import get_transform
-
-
 
 _PRINT_FREQUENCY = 5.0  # seconds
 _QOSPROFILE_MAP = {
@@ -30,23 +35,26 @@ _QOSPROFILE_MAP = {
 
 
 class Predictor(Node):
-    """ Predictor node for deployment of Flowcean models."""
+    """Predictor node for deployment of Flowcean models."""
 
     def __init__(self) -> None:
         super().__init__("predictor")
-        
-        self.declare_parameter("model_path", "models/model.pt")
+
+        self.declare_parameter("model_path", "models/model.fml")
         self.declare_parameter("topics_info", "config/topics_config.yaml")
         self.declare_parameter("input_threshold", 0.1)
         self.declare_parameter("buffer_length", 1)
         self.declare_parameter("use_map_file", False)
-        
-        use_map_file = self.get_parameter("use_map_file").get_parameter_value().bool_value
-        buf_len = self.get_parameter("buffer_length").get_parameter_value().integer_value
+
+        use_map_file = (
+            self.get_parameter("use_map_file").get_parameter_value().bool_value
+        )
+        buf_len = (
+            self.get_parameter("buffer_length").get_parameter_value().integer_value
+        )
         self.buffer = DataBuffer(length=buf_len)
         input_conf, output_conf = self._load_topics_config()
         self.model = self._load_model()
-
 
         time_start = time.time()
 
@@ -54,17 +62,16 @@ class Predictor(Node):
         to_subscribe = set(input_conf.keys())
         while len(to_subscribe) > 0:
             topics_and_types = dict(self.get_topic_names_and_types())
-            
+
             for topic_name, t_info in input_conf.items():
-                
                 # Only create new subscription if topic is not already subscribed
                 if topic_name not in to_subscribe or topic_name not in topics_and_types:
                     continue
-                
+
                 # Import module of message type
-                type_name : str = topics_and_types[topic_name]
+                type_name: str = topics_and_types[topic_name]
                 msg_class = get_msg_class(topic_name, type_name)
-                
+
                 try:
                     if "include" in t_info:
                         fields_to_store = t_info["include"]
@@ -74,17 +81,23 @@ class Predictor(Node):
                         fields_to_exclude = t_info.get("exclude", [])
                         for f in fields_to_exclude:
                             assert msg_has_field(msg_class, f)
-                        fields_to_store = get_all_fields_of_class(msg_class) - fields_to_exclude
+                        fields_to_store = (
+                            get_all_fields_of_class(msg_class) - fields_to_exclude
+                        )
 
                 except AssertionError:
                     self.get_logger().error(
                         f"Topic {topic_name} of type {type_name} has no field {f}",
                     )
                     raise
-                
+
                 # handle map separately
                 if topic_name == "/map":
-                    msg = self._load_map_file() if use_map_file else self._call_map_service()
+                    msg = (
+                        self._load_map_file()
+                        if use_map_file
+                        else self._call_map_service()
+                    )
                     success = msg != None
                 else:
                     # only subscribe to topics that continously publish
@@ -95,18 +108,17 @@ class Predictor(Node):
                     )
 
                 # only add to buffer if subscribed or data loaded successfully
-                if success:     
+                if success:
                     self.buffer[topic_name] = MsgData(
                         topic=topic_name,
                         fields=fields_to_store,
                         is_single=bool(t_info.get("one_time", False)),
                     )
                     to_subscribe.remove(topic_name)
-                    
+
                     if topic_name == "/map":
                         self._callback_to_store_msg(msg, "/map")
                         self._logger.info("Map data loaded successfully.")
-                        
 
             time_curr = time.time()
             if time_curr - time_start > _PRINT_FREQUENCY:
@@ -116,15 +128,11 @@ class Predictor(Node):
                 )
 
         # handle output configuration
-        self.test_publishers : list[PublisherInfo] = []
-        self._publisher_dict : dict[PublisherInfo, Publisher] = {}
+        self.test_publishers: list[PublisherInfo] = []
+        self._publisher_dict: dict[PublisherInfo, Publisher] = {}
         for topic_name, t_info in output_conf.items():
-
-            msg_class = get_msg_class(
-                topic_name,
-                [t_info["type"]]   
-            )
-            assert (msg_has_field(msg_class, f) for f in t_info["map"]) 
+            msg_class = get_msg_class(topic_name, [t_info["type"]])
+            assert (msg_has_field(msg_class, f) for f in t_info["map"])
 
             ros_publisher = self.create_publisher(
                 msg_type=msg_class,
@@ -134,25 +142,22 @@ class Predictor(Node):
                 ],
             )
             publisher_info = PublisherInfo(
-                msg_class=msg_class,
-                topic_name=topic_name,
-                map = t_info["map"]
-                )
-            
+                msg_class=msg_class, topic_name=topic_name, map=t_info["map"]
+            )
+
             self._publisher_dict[publisher_info] = ros_publisher
 
-
     def _load_model(self) -> Model:
-        """ Load the Flowcean model from the specified path."""
-        
+        """Load the Flowcean model from the specified path."""
+
         path = self.get_parameter("model_path").get_parameter_value().string_value
         if not path:
             raise ValueError("Model path cannot be empty.")
-        
+
         return Model.load(path)
- 
+
     def _load_topics_config(self) -> tuple[dict, dict]:
-        """ Read input and output configuration from YAML file."""
+        """Read input and output configuration from YAML file."""
 
         path = self.get_parameter("topics_info").get_parameter_value().string_value
         with open(path) as f:
@@ -168,25 +173,28 @@ class Predictor(Node):
         """
         self.declare_parameter("map_file", "maps/map.pgm")
         self.declare_parameter("map_info_file", "maps/map.yaml")
-        
+
         try:
             from PIL import Image
+
             img = Image.open(
-                    self.get_parameter("map_file").get_parameter_value().string_value
-                ).convert("L")
+                self.get_parameter("map_file").get_parameter_value().string_value
+            ).convert("L")
             width, height = img.size
             img = np.array(img)
-            
-            path = self.get_parameter("map_info_file").get_parameter_value().string_value
+
+            path = (
+                self.get_parameter("map_info_file").get_parameter_value().string_value
+            )
             with open(path) as f:
-                map_info : dict = yaml_safe_load(f)
+                map_info: dict = yaml_safe_load(f)
         except Exception as e:
             self.get_logger().error(f"Failed to load map file: {e}")
-            return None  
-        
+            return None
+
         negate = map_info.get("negate", 0)
         occ_th = map_info.get("occupied_thresh", 0.65)
-        free_th = map_info.get("free_thresh", 0.196)    
+        free_th = map_info.get("free_thresh", 0.196)
 
         # Convert grayscale to occupancy values
         occupancy = []
@@ -222,6 +230,7 @@ class Predictor(Node):
         Call the /map service to get the map data.
         """
         from nav_msgs.srv import GetMap
+
         client = self.create_client(GetMap, "map")
         while not client.wait_for_service(timeout_sec=1.0):
             self.get_logger().info("Waiting for /map service...")
@@ -229,14 +238,14 @@ class Predictor(Node):
         req = GetMap.Request()
         future = client.call_async(req)
         rclpy.spin_until_future_complete(self, future)
-        res : GetMap.Response = future.result()
+        res: GetMap.Response = future.result()
 
         if res is None:
             self.get_logger().error(
                 "Failed to call /map service. Is the map server running?",
             )
             return None
-        
+
         self.get_logger().info("Map received.")
         return res.map
 
@@ -265,7 +274,7 @@ class Predictor(Node):
             )
             return False
         return True
-    
+
     def _callback_to_store_msg(self, msg: Any, topic: str) -> None:
         msg_data: MsgData = self.buffer.get(topic, None)
         if msg_data.is_single and msg_data.data_complete():
@@ -290,9 +299,11 @@ class Predictor(Node):
 
         frames = []
         for topic_name, msg_data in self.buffer.items():
-            
-            fields, values = msg_data.keys(), msg_data.values() # HERE msg_data.items() gives fields and values wrongly
-            
+            fields, values = (
+                msg_data.keys(),
+                msg_data.values(),
+            )  # HERE msg_data.items() gives fields and values wrongly
+
             values = [_unpack_to_dict(v) for v in values]
             df = pl.LazyFrame([values], schema=fields, orient="row")
             time = pl.Series("time", [msg_data.get_stamp()]).cast(pl.Int64)
@@ -307,11 +318,7 @@ class Predictor(Node):
             )
             frames.append(df)
 
-        return (
-            pl.concat(frames, how="horizontal")
-            if frames
-            else pl.LazyFrame()
-        )
+        return pl.concat(frames, how="horizontal") if frames else pl.LazyFrame()
 
     def predict(self) -> None:
         self.get_logger().info("  >>  Prediction...")
@@ -324,16 +331,11 @@ class Predictor(Node):
             data,
         )
         output = output.collect().to_dict(as_series=False)
-        
 
         for info, publisher in self._publisher_dict.items():
             msg = info.convert(output)
             publisher.publish(msg)
         self.buffer.empty()
-
-
-
-
 
 
 def main(args: list[str] | None = None) -> None:
