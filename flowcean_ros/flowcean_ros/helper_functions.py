@@ -2,12 +2,13 @@ import math
 from geometry_msgs.msg import Quaternion
 from core.logic import helper_function
 
+
 @helper_function
 def quaternion_from_euler(*args):
     """
     Converts euler roll, pitch, yaw to quaternion (w in last place)
     """
-    (yaw, ) = args
+    (yaw,) = args
 
     roll, pitch = 0
     cy = math.cos(yaw * 0.5)

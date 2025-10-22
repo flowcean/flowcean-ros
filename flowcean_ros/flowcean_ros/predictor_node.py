@@ -12,6 +12,8 @@ from core.logic import (
     msg_has_field,
 )
 from core.msg_data import MsgData
+from core.logic import _unpack_to_dict, get_all_fields_of_class, get_msg_class, msg_has_field
+from flowcean_ros.publisher_logic import PublisherInfo
 from nav_msgs.msg import OccupancyGrid
 from rclpy.node import Node
 from rclpy.publisher import Publisher
@@ -22,6 +24,8 @@ from flowcean.core.model import Model
 from flowcean_ros.publisher_info import PublisherInfo
 from flowcean_ros.transforms import get_transform
 
+
+ 
 _PRINT_FREQUENCY = 5.0  # seconds
 _QOSPROFILE_MAP = {
     "UNKNOWN": QoSPresetProfiles.UNKNOWN.value,
@@ -39,8 +43,8 @@ class Predictor(Node):
 
     def __init__(self) -> None:
         super().__init__("predictor")
-
-        self.declare_parameter("model_path", "models/model.fml")
+        
+        self.declare_parameter("model_path", "models/model.pt")
         self.declare_parameter("topics_info", "config/topics_config.yaml")
         self.declare_parameter("input_threshold", 0.1)
         self.declare_parameter("buffer_length", 1)
