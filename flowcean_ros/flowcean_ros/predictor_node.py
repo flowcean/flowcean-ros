@@ -12,8 +12,6 @@ from core.logic import (
     msg_has_field,
 )
 from core.msg_data import MsgData
-from core.logic import _unpack_to_dict, get_all_fields_of_class, get_msg_class, msg_has_field
-from flowcean_ros.publisher_info import PublisherInfo
 from nav_msgs.msg import OccupancyGrid
 from rclpy.node import Node
 from rclpy.publisher import Publisher
@@ -22,10 +20,8 @@ from yaml import safe_load as yaml_safe_load
 
 from flowcean.core.model import Model
 from flowcean_ros.publisher_info import PublisherInfo
-from flowcean_ros.transforms import get_transform
+from flowcean_ros.transforms import explode_and_collect_samples, get_transform
 
-
- 
 _PRINT_FREQUENCY = 5.0  # seconds
 _QOSPROFILE_MAP = {
     "UNKNOWN": QoSPresetProfiles.UNKNOWN.value,
@@ -43,7 +39,7 @@ class Predictor(Node):
 
     def __init__(self) -> None:
         super().__init__("predictor")
-        
+
         self.declare_parameter("model_path", "models/model.fml")
         self.declare_parameter("topics_info", "config/topics_config.yaml")
         self.declare_parameter("input_threshold", 0.1)
@@ -54,7 +50,9 @@ class Predictor(Node):
             self.get_parameter("use_map_file").get_parameter_value().bool_value
         )
         buf_len = (
-            self.get_parameter("buffer_length").get_parameter_value().integer_value
+            self.get_parameter("buffer_length")
+            .get_parameter_value()
+            .integer_value
         )
         self.buffer = DataBuffer(length=buf_len)
         input_conf, output_conf = self._load_topics_config()
@@ -69,7 +67,10 @@ class Predictor(Node):
 
             for topic_name, t_info in input_conf.items():
                 # Only create new subscription if topic is not already subscribed
-                if topic_name not in to_subscribe or topic_name not in topics_and_types:
+                if (
+                    topic_name not in to_subscribe
+                    or topic_name not in topics_and_types
+                ):
                     continue
 
                 # Import module of message type
@@ -86,7 +87,8 @@ class Predictor(Node):
                         for f in fields_to_exclude:
                             assert msg_has_field(msg_class, f)
                         fields_to_store = (
-                            get_all_fields_of_class(msg_class) - fields_to_exclude
+                            get_all_fields_of_class(msg_class)
+                            - fields_to_exclude
                         )
 
                 except AssertionError:
@@ -104,7 +106,7 @@ class Predictor(Node):
                     )
                     success = msg != None
                 else:
-                    # only subscribe to topics that continously publish
+                    # only subscribe to topics that continuously publish
                     success = self._subscribe_to_topic(
                         topic_name=topic_name,
                         msg_type=msg_class,
@@ -121,8 +123,8 @@ class Predictor(Node):
                     to_subscribe.remove(topic_name)
 
                     if topic_name == "/map":
+                        self._logger.info("Map data loaded successfully!")
                         self._callback_to_store_msg(msg, "/map")
-                        self._logger.info("Map data loaded successfully.")
 
             time_curr = time.time()
             if time_curr - time_start > _PRINT_FREQUENCY:
@@ -146,24 +148,30 @@ class Predictor(Node):
                 ],
             )
             publisher_info = PublisherInfo(
-                msg_class=msg_class, topic_name=topic_name, map=t_info["map"]
+                msg_class=msg_class,
+                topic_name=topic_name,
+                occupancy_map=t_info["map"],
             )
 
             self._publisher_dict[publisher_info] = ros_publisher
 
     def _load_model(self) -> Model:
         """Load the Flowcean model from the specified path."""
-
-        path = self.get_parameter("model_path").get_parameter_value().string_value
+        path = (
+            self.get_parameter("model_path").get_parameter_value().string_value
+        )
         if not path:
             raise ValueError("Model path cannot be empty.")
-
-        return Model.load(path)
+        model = Model.load(path)
+        return model
 
     def _load_topics_config(self) -> tuple[dict, dict]:
         """Read input and output configuration from YAML file."""
-
-        path = self.get_parameter("topics_info").get_parameter_value().string_value
+        path = (
+            self.get_parameter("topics_info")
+            .get_parameter_value()
+            .string_value
+        )
         with open(path) as f:
             config: dict = yaml_safe_load(f)
             input_conf: dict = config["input_topics"]
@@ -172,9 +180,7 @@ class Predictor(Node):
         return input_conf, output_conf
 
     def _load_map_file(self) -> OccupancyGrid:
-        """
-        Load map from pgm and yaml files.
-        """
+        """Load map from pgm and yaml files."""
         self.declare_parameter("map_file", "maps/map.pgm")
         self.declare_parameter("map_info_file", "maps/map.yaml")
 
@@ -182,13 +188,17 @@ class Predictor(Node):
             from PIL import Image
 
             img = Image.open(
-                self.get_parameter("map_file").get_parameter_value().string_value
+                self.get_parameter("map_file")
+                .get_parameter_value()
+                .string_value,
             ).convert("L")
             width, height = img.size
             img = np.array(img)
 
             path = (
-                self.get_parameter("map_info_file").get_parameter_value().string_value
+                self.get_parameter("map_info_file")
+                .get_parameter_value()
+                .string_value
             )
             with open(path) as f:
                 map_info: dict = yaml_safe_load(f)
@@ -230,9 +240,7 @@ class Predictor(Node):
         return grid
 
     def _call_map_service(self) -> OccupancyGrid:
-        """
-        Call the /map service to get the map data.
-        """
+        """Call the /map service to get the map data."""
         from nav_msgs.srv import GetMap
 
         client = self.create_client(GetMap, "map")
@@ -263,7 +271,8 @@ class Predictor(Node):
             self.create_subscription(
                 msg_type,
                 topic_name,
-                lambda msg_data, topic_name=topic_name: self._callback_to_store_msg(
+                lambda msg_data,
+                topic_name=topic_name: self._callback_to_store_msg(
                     msg_data,
                     topic_name,
                 ),
@@ -281,7 +290,7 @@ class Predictor(Node):
 
     def _callback_to_store_msg(self, msg: Any, topic: str) -> None:
         msg_data: MsgData = self.buffer.get(topic, None)
-        if msg_data.is_single and msg_data.data_complete():
+        if msg_data.data_complete():
             return
 
         self.buffer.store(
@@ -297,10 +306,7 @@ class Predictor(Node):
             self.predict()
 
     def _generate_observation(self) -> pl.DataFrame:
-        """
-        Transforms a Dataframe based on data in the buffer.
-        """
-
+        """Transforms a Dataframe based on data in the buffer."""
         frames = []
         for topic_name, msg_data in self.buffer.items():
             fields, values = (
@@ -308,6 +314,7 @@ class Predictor(Node):
                 msg_data.values(),
             )  # HERE msg_data.items() gives fields and values wrongly
 
+            fields = list(fields)
             values = [_unpack_to_dict(v) for v in values]
             df = pl.LazyFrame([values], schema=fields, orient="row")
             time = pl.Series("time", [msg_data.get_stamp()]).cast(pl.Int64)
@@ -322,15 +329,18 @@ class Predictor(Node):
             )
             frames.append(df)
 
-        return pl.concat(frames, how="horizontal") if frames else pl.LazyFrame()
+        return (
+            pl.concat(frames, how="horizontal") if frames else pl.LazyFrame()
+        )
 
     def predict(self) -> None:
         self.get_logger().info("  >>  Prediction...")
 
         observation: pl.LazyFrame = self._generate_observation()
-
         transform = get_transform()
         data = transform(observation)
+
+        data = explode_and_collect_samples(data)
         output: pl.LazyFrame = self.model.predict(
             data,
         )

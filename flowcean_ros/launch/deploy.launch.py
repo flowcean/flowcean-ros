@@ -12,22 +12,36 @@ def generate_launch_description() -> LaunchDescription:
     package_path = get_package_share_directory("flowcean_ros")
 
     # threshold in seconds for input to be considered valid
-    threshold = 0.1  
+    threshold = 0.1
 
     # number of messages to buffer in the subscriber queue
     buffer_length = 10
 
     # yaml file with input topic information
-    topics_info = os.path.join(package_path, "config", "topics_config.yaml",)
-    
+    topics_info = os.path.join(
+        package_path,
+        "config",
+        "topics_config_localization_monitor.yaml",
+    )
+
     # fml file containing the trained model
-    model_path = os.path.join(package_path, "models", "model.fml")
-    
+    model_path = os.path.join(
+        package_path,
+        "models",
+        "robot_localization_1_0_40epochs.model",
+    )
+
+    model_path = "/home/workstation/ros2_ws/src/flowcean/examples/robot_localization_failure/models/robot_localization.fml"
+
     # load a map from disk
-    map_path = os.path.join(package_path, "maps", "warehouse_slamtoolbox.pgm")
+    map_path = os.path.join(package_path, "maps", "symmetric_exp_2.pgm")
 
     # load map info from disk
-    map_info_path = os.path.join(package_path, "maps", "warehouse_slamtoolbox.yaml")
+    map_info_path = os.path.join(
+        package_path,
+        "maps",
+        "symmetric_exp_2.yaml",
+    )
 
     return LaunchDescription(
         [

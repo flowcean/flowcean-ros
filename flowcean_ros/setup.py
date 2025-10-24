@@ -1,14 +1,14 @@
 import os
 from glob import glob
 
-from setuptools import setup
+from setuptools import find_packages, setup
 
 package_name = "flowcean_ros"
 
 setup(
     name=package_name,
     version="0.1.0",
-    packages=[package_name],
+    packages=find_packages(include=[package_name, f"{package_name}.*"]),
     data_files=[
         (
             os.path.join("share", package_name, "launch"),
@@ -25,6 +25,10 @@ setup(
         (
             os.path.join("share", package_name, "models"),
             glob(os.path.join("models", "*.fml")),
+        ),
+        (
+            os.path.join("share", package_name, "models"),
+            glob(os.path.join("models", "*.model")),
         ),
         (
             os.path.join("share", package_name, "maps"),

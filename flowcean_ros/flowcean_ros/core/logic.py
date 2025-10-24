@@ -1,10 +1,11 @@
-import importlib
-from typing import Any
-from dataclasses import fields, is_dataclass
-from rosidl_runtime_py.utilities import get_message
-import inspect
 import collections.abc
+import importlib
+import inspect
+from dataclasses import fields, is_dataclass
+from typing import Any
+
 import numpy as np
+from rosidl_runtime_py.utilities import get_message
 
 
 def set_field_value_of_ros_msg(msg_instance: Any, field: str, value: Any):
@@ -51,9 +52,7 @@ def get_all_fields_of_class(msg_class: Any, prefix="") -> list[str]:
 
 
 def msg_has_field(msg_class: Any, field: str) -> bool:
-    """
-    Recursively checks if a field is part of a msg.
-    """
+    """Recursively checks if a field is part of a msg."""
     if "." in field:
         field, nested_fields = field.split(".", 1)
     else:
@@ -77,6 +76,14 @@ def msg_has_field(msg_class: Any, field: str) -> bool:
 def _unpack_to_dict(obj: object) -> object:
     if isinstance(obj, (tuple, list)):
         return type(obj)(_unpack_to_dict(item) for item in obj)
+    if hasattr(obj, "__slots__") and hasattr(
+        obj,
+        "get_fields_and_field_types",
+    ):
+        return {
+            f: _unpack_to_dict(getattr(obj, f))
+            for f in obj.get_fields_and_field_types()
+        }
     if is_dataclass(obj) and not isinstance(obj, type):
         return {
             f.name: _unpack_to_dict(getattr(obj, f.name))
@@ -84,14 +91,15 @@ def _unpack_to_dict(obj: object) -> object:
             if f.name != "__msgtype__"
         }
     if isinstance(obj, np.ndarray):
+        obj = obj.astype(np.float32, copy=False)
         return obj.tolist()
+    if isinstance(obj, collections.abc.Sequence):
+        return list(obj)
     return obj
 
 
 def helper_function(func):
-    """
-    this function clarifies that defined helper functions need *args
-    """
+    """This function clarifies that defined helper functions need *args"""
 
     def validate_helper(func):
         sig = inspect.signature(func)
@@ -99,10 +107,11 @@ def helper_function(func):
         # must have only one VAR_POSITIONAL parameter (*args)
         params = list(sig.parameters.values())
         if not (
-            len(params) == 1 and params[0].kind == inspect.Parameter.VAR_POSITIONAL
+            len(params) == 1
+            and params[0].kind == inspect.Parameter.VAR_POSITIONAL
         ):
             raise TypeError(
-                f"Helper '{func.__name__}' must have a *args signature, but got {sig}"
+                f"Helper '{func.__name__}' must have a *args signature, but got {sig}",
             )
         return func
 
@@ -111,7 +120,9 @@ def helper_function(func):
     def wrapper(*args):
         result = func(*args)
         if not isinstance(result, (list, tuple)):
-            raise TypeError(f"Helper '{func.__name__}' must return a list/tuple")
+            raise TypeError(
+                f"Helper '{func.__name__}' must return a list/tuple",
+            )
         return result
 
     return wrapper

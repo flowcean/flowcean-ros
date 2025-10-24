@@ -1,8 +1,7 @@
-from core.msg_data import MsgData
 from typing import Any
-from builtin_interfaces.msg import Time
 
-_TO_NANO = 1e9
+from builtin_interfaces.msg import Time
+from core.msg_data import MsgData
 
 
 class DataBuffer(dict[str, MsgData]):
@@ -27,13 +26,13 @@ class DataBuffer(dict[str, MsgData]):
             ros_msg: The ROS message to store.
             timestamp: The timestamp of the message.
         """
-
-        msg_data: MsgData = self.get(topic_name, MsgData(topic=topic_name))
+        msg_data: MsgData = self.get(topic_name, None)
 
         if msg_data is None:
-            raise KeyError(f"Topic '{topic_name}' not found in buffer.")
+            err = f"Topic '{topic_name}' not found in buffer."
+            raise KeyError(err)
 
-        msg_data.stamp(timestamp.sec * _TO_NANO + timestamp.nanosec)
+        msg_data.stamp(timestamp)
 
         for field in msg_data.keys():
             value = ros_msg
@@ -45,13 +44,7 @@ class DataBuffer(dict[str, MsgData]):
         """Check if msgs for all topics have been received."""
         return all(v.data_complete() for v in self.values())
 
-    def empty(self, keep_single: bool = True) -> None:
-        """Delete old msgs from the buffer.
-
-        Args:
-            keep_single: If True, single messages will not be cleared.
-        """
-
+    def empty(self) -> None:
+        """Deletes old msgs from the buffer but keeps single msgs."""
         for v in self.values():
-            if not v.is_single() or not keep_single:
-                v.empty()
+            v.empty()
