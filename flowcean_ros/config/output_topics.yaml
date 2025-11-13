@@ -1,0 +1,9 @@
+# Specify here which topics you want to subscribe to and which fields you
+# want to use from each topic.
+# Make sure to specify the correct message type and fields for each topic.
+"/predicted_delocalization":
+  msg_type: "std_msgs.msg.Bool"
+  fields:
+    - "data"
+  qos_profile: "SENSOR_DATA"
+

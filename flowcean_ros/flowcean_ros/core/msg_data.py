@@ -1,17 +1,13 @@
 from typing import Any
 
-
 class MsgData(dict[str, Any]):
-    """A class to hold message data with a topic name and timestamp."""
-
+    """ A class to hold message data with a topic name and timestamp."""
     _topic_name: str
     _is_single: bool
     _timestamp: float
 
-    def __init__(
-        self, topic: str = "", fields: list[str] = [], is_single: bool = False
-    ) -> None:
-        """Create a MsgData instance to store fields of a message.
+    def __init__(self, topic: str = "", fields: list[str] = [], is_single: bool = False) -> None:
+        """ Create a MsgData instance to store fields of a message.
 
         Args:
             topic_name: The name of the topic this message belongs to.
@@ -46,9 +42,9 @@ class MsgData(dict[str, Any]):
 
     def get_stamp(self) -> int:
         return int(self._timestamp)
-
+    
     def is_single(self) -> bool:
         return self._is_single
-
+    
     def get_topic_name(self) -> str:
         return self._topic_name
