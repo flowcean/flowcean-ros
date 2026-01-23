@@ -1,0 +1,99 @@
+#                             ===========================================
+#                             HOW TO DEFINE INPUT TOPICS FOR flowcean_ros
+#                             ===========================================
+#
+# Structure:
+# input_topics:
+#   "<topic_name>":
+#     - single_msg: <true/false>  # Optional, specify if the topic only contains a single message to grab
+#     - include:  # Optional, specify fields to include
+#       - "<field_name>"
+#     - exclude:  # Optional, specify fields to exclude
+#       - "<field_name>"
+#     - qos_profile: "<profile_name>"  # Optional, specify QoS profile
+#     - threshold: <value>  # Optional, specify individual threshold for the topic to be considered valid
+#
+# Note:
+# -> Msg types are detected automatically based on the topic name.
+# -> If include and exclude are not specified, flowcean_ros will subscribe to the entire message.
+# -> Use either include or exclude. If both are specified, flowcean_ros prioritizes include.
+#
+#                             ===========================================
+#                             HOW TO DEFINE OUTPUT TOPIC FOR flowcean_ros
+#                             ===========================================
+#
+# Structure:
+# output_topic:
+#   - name: "<output_topic_name>"  # Name of the output topic
+#   - msg_type: "<message_type>"  # Type of the message to be published
+#   - qos_profile: "<profile_name>"  # QoS profile for the output topic
+
+input_topics:
+  "/amcl_pose":
+    include:
+      - "pose.pose.position.x"
+      - "pose.pose.position.y"
+      - "pose.pose.orientation.x"
+      - "pose.pose.orientation.y"
+      - "pose.pose.orientation.z"
+      - "pose.pose.orientation.w"
+    qos_profile: "SENSOR_DATA"
+    threshold: 1.0
+
+  "/scan":
+    include:
+      - "ranges"
+      - "angle_min"
+      - "angle_max"
+      - "angle_increment"
+      - "range_min"
+      - "range_max"
+    qos_profile: "SENSOR_DATA"
+    threshold: 1.0
+
+  "/map":
+    include:
+      - "data"
+      - "info.resolution"
+      - "info.width"
+      - "info.height"
+      - "info.origin.position.x"
+      - "info.origin.position.y"
+      - "info.origin.position.z"
+      - "info.origin.orientation.x"
+      - "info.origin.orientation.y"
+      - "info.origin.orientation.z"
+      - "info.origin.orientation.w"
+    one_time : "true"
+    qos_profile: "SENSOR_DATA"
+    threshold: 1.0
+
+  "/particle_cloud":
+    include:
+      - "particles"
+    qos_profile: "SENSOR_DATA"
+    threshold: 1.0
+    
+
+
+output_topics:
+  "/output":
+    type: "std_msgs/msg/Float32"
+    map:
+      "data" : "is_delocalized"
+    qos_profile: "SENSOR_DATA"
+    frequency: 0.1
+
+# output_topics:
+#   "/output":
+#     type: "geometry.msg.pose"
+#     map:
+#       "pose.pose.position.x" : "x_next"  
+#       "pose.pose.position.y" : "y_next"  
+#       "pose.pose.orientation.x": "helper"  
+#       "pose.pose.orientation.y": "helper"  
+#       "pose.pose.orientation.z": "helper"  
+#       "pose.pose.orientation.w": "helper"  
+#       helper: [euler_to_quaternion", ["next_yaw"]]
+#     qos_profile: "SENSOR_DATA"
+#     frequency: 0.1

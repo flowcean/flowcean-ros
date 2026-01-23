@@ -1,4 +1,5 @@
 import time
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -20,7 +21,7 @@ from yaml import safe_load as yaml_safe_load
 
 from flowcean.core.model import Model
 from flowcean_ros.publisher_info import PublisherInfo
-from flowcean_ros.transforms import explode_and_collect_samples, get_transform
+from flowcean_ros.transforms import get_transform, set_occupancy_map
 
 _PRINT_FREQUENCY = 5.0  # seconds
 _QOSPROFILE_MAP = {
@@ -105,6 +106,19 @@ class Predictor(Node):
                         else self._call_map_service()
                     )
                     success = msg != None
+
+                    # Convert OccupancyGrid to dict format for feature extraction
+                    if success and msg is not None:
+                        occupancy_map_dict = {
+                            "data": list(msg.data),
+                            "info.width": msg.info.width,
+                            "info.height": msg.info.height,
+                            "info.resolution": msg.info.resolution,
+                            "info.origin.position.x": msg.info.origin.position.x,
+                            "info.origin.position.y": msg.info.origin.position.y,
+                        }
+                        set_occupancy_map(occupancy_map_dict)
+                        self.get_logger().info("Map data loaded successfully!")
                 else:
                     # only subscribe to topics that continuously publish
                     success = self._subscribe_to_topic(
@@ -156,13 +170,33 @@ class Predictor(Node):
             self._publisher_dict[publisher_info] = ros_publisher
 
     def _load_model(self) -> Model:
-        """Load the Flowcean model from the specified path."""
+        """Load the Flowcean model from the specified path.
+
+        Supports both:
+        - .fml files (standard Flowcean format)
+        - ml_pipeline directories (directory-based format with model.pkl, etc.)
+        """
         path = (
             self.get_parameter("model_path").get_parameter_value().string_value
         )
         if not path:
             raise ValueError("Model path cannot be empty.")
-        model = Model.load(path)
+
+        path_obj = Path(path)
+
+        # Check if path is a directory (ml_pipeline format)
+        if path_obj.is_dir():
+            # Import here to avoid circular dependencies
+            from ml_pipeline.models.ml_pipeline_model import MLPipelineModel
+            model = MLPipelineModel.load_from_directory(path_obj)
+            self.get_logger().info(
+                f"Loaded ml_pipeline model from directory: {path}"
+            )
+        else:
+            # Standard .fml format
+            model = Model.load(path)
+            self.get_logger().info(f"Loaded .fml model from file: {path}")
+
         return model
 
     def _load_topics_config(self) -> tuple[dict, dict]:
@@ -340,7 +374,7 @@ class Predictor(Node):
         transform = get_transform()
         data = transform(observation)
 
-        data = explode_and_collect_samples(data)
+        # explode_and_collect_samples is now part of the transform pipeline
         output: pl.LazyFrame = self.model.predict(
             data,
         )
