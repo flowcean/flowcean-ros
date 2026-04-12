@@ -38,8 +38,7 @@ def generate_launch_description() -> LaunchDescription:
     )
 
     # Model path - supports both .fml files and ml_pipeline directories
-    # Using test_1 model which doesn't require temporal features
-    model_path = "/home/workstation/ros2_ws/src/flowcean/examples/robot_localization_failure/models/test_1_catboost_2026-01-03_17-16-51"
+    model_path = "/home/workstation/ros2_ws/src/flowcean/examples/robot_localization_failure/ml_pipeline/artifacts/models/small_odometry_drift_lgbm_2026-03-04_16-24-27"
 
     # load a map from disk
     map_path = os.path.join(package_path, "maps", "unsymmetric_exp_1.pgm")

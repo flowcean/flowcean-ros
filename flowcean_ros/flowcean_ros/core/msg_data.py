@@ -51,7 +51,7 @@ class MsgData(dict[str, Any]):
 
     def data_complete(self) -> bool:
         """Check if msg data is available."""
-        return None not in super().values()
+        return not any(v is None for v in super().values())
 
     def get_stamp(self) -> int:
         return self._stamp

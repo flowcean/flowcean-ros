@@ -13,6 +13,7 @@ from core.logic import (
     msg_has_field,
 )
 from core.msg_data import MsgData
+from geometry_msgs.msg import PoseWithCovarianceStamped
 from nav_msgs.msg import OccupancyGrid
 from rclpy.node import Node
 from rclpy.publisher import Publisher
@@ -21,7 +22,12 @@ from yaml import safe_load as yaml_safe_load
 
 from flowcean.core.model import Model
 from flowcean_ros.publisher_info import PublisherInfo
-from flowcean_ros.transforms import get_transform, set_occupancy_map
+from flowcean_ros.transforms import (
+    get_transform,
+    reset_feature_history,
+    set_occupancy_map,
+    set_use_temporal_features,
+)
 
 _PRINT_FREQUENCY = 5.0  # seconds
 _QOSPROFILE_MAP = {
@@ -58,6 +64,25 @@ class Predictor(Node):
         self.buffer = DataBuffer(length=buf_len)
         input_conf, output_conf = self._load_topics_config()
         self.model = self._load_model()
+
+        # Configure temporal features based on the loaded model's metadata.
+        # reset_feature_history() ensures a clean slate on every (re)start.
+        use_temporal = getattr(self.model, "temporal_features", False)
+        set_use_temporal_features(use_temporal)
+        reset_feature_history()
+        if use_temporal:
+            self.get_logger().info(
+                "Temporal features enabled — subscribing to /initialpose "
+                "to reset history on AMCL resets."
+            )
+            self.create_subscription(
+                PoseWithCovarianceStamped,
+                "/initialpose",
+                lambda _msg: reset_feature_history(),
+                10,
+            )
+        else:
+            self.get_logger().info("Temporal features disabled.")
 
         time_start = time.time()
 
@@ -368,7 +393,7 @@ class Predictor(Node):
         )
 
     def predict(self) -> None:
-        self.get_logger().info("  >>  Prediction...")
+        self.get_logger().debug("  >>  Prediction...")
 
         observation: pl.LazyFrame = self._generate_observation()
         transform = get_transform()

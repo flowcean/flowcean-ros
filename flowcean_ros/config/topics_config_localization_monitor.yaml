@@ -37,6 +37,7 @@ input_topics:
       - "pose.pose.orientation.y"
       - "pose.pose.orientation.z"
       - "pose.pose.orientation.w"
+      - "pose.covariance"
     qos_profile: "SENSOR_DATA"
     threshold: 1.0
 
@@ -71,6 +72,20 @@ input_topics:
   "/particle_cloud":
     include:
       - "particles"
+    qos_profile: "SENSOR_DATA"
+    threshold: 1.0
+
+  "/imperfect_odom":
+    include:
+      - "twist.twist.linear.x"
+      - "twist.twist.angular.z"
+    qos_profile: "SENSOR_DATA"
+    threshold: 1.0
+
+  "/cmd_vel":
+    include:
+      - "linear.x"
+      - "angular.z"
     qos_profile: "SENSOR_DATA"
     threshold: 1.0
     

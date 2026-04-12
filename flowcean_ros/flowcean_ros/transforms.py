@@ -1,3 +1,5 @@
+from collections import deque
+
 import polars as pl
 from custom_transforms.collapse import Collapse
 from custom_transforms.scan_map_statistics import ScanMapStatistics
@@ -11,11 +13,27 @@ from flowcean.polars.transforms.zero_order_hold_matching import ZeroOrderHold
 # Global variable to store the map data
 _OCCUPANCY_MAP = None
 
+# Feature history for temporal feature computation (diff1, mean5, std5).
+# Stores the last 5 base feature dicts (before temporal features are added).
+_FEATURE_HISTORY: deque = deque(maxlen=5)
+_USE_TEMPORAL_FEATURES: bool = False
+
 
 def set_occupancy_map(occupancy_map: dict) -> None:
     """Set the global occupancy map for feature extraction."""
     global _OCCUPANCY_MAP
     _OCCUPANCY_MAP = occupancy_map
+
+
+def set_use_temporal_features(use: bool) -> None:
+    """Enable or disable temporal feature computation at inference time."""
+    global _USE_TEMPORAL_FEATURES
+    _USE_TEMPORAL_FEATURES = use
+
+
+def reset_feature_history() -> None:
+    """Clear the feature history buffer (call on AMCL reset or node startup)."""
+    _FEATURE_HISTORY.clear()
 
 
 def get_transform() -> Transform:
@@ -67,12 +85,64 @@ def localization_monitor_transforms() -> Transform:
                 else:
                     feature_dict[col] = None
 
+        # AMCL covariance: σ²_x, σ²_y, σ²_θ from pose.covariance[0,7,35]
+        if "/amcl_pose" in df_collected.columns:
+            amcl_ts = df_collected["/amcl_pose"][0]
+            if amcl_ts is not None and len(amcl_ts) > 0:
+                amcl_val = amcl_ts[-1]["value"]
+                if isinstance(amcl_val, dict):
+                    cov = amcl_val.get("pose.covariance")
+                    if cov is not None and len(cov) >= 36:
+                        feature_dict["amcl_cov_x"] = float(cov[0])
+                        feature_dict["amcl_cov_y"] = float(cov[7])
+                        feature_dict["amcl_cov_yaw"] = float(cov[35])
+
+        # Odometry velocity: forward speed and rotation rate
+        if "/imperfect_odom" in df_collected.columns:
+            odom_ts = df_collected["/imperfect_odom"][0]
+            if odom_ts is not None and len(odom_ts) > 0:
+                odom_val = odom_ts[-1]["value"]
+                if isinstance(odom_val, dict):
+                    feature_dict["odom_linear_x"] = float(odom_val.get("twist.twist.linear.x", 0.0))
+                    feature_dict["odom_angular_z"] = float(odom_val.get("twist.twist.angular.z", 0.0))
+
+        # Commanded velocity from Nav2
+        if "/cmd_vel" in df_collected.columns:
+            cmd_ts = df_collected["/cmd_vel"][0]
+            if cmd_ts is not None and len(cmd_ts) > 0:
+                cmd_val = cmd_ts[-1]["value"]
+                if isinstance(cmd_val, dict):
+                    feature_dict["cmd_linear_x"] = float(cmd_val.get("linear.x", 0.0))
+                    feature_dict["cmd_angular_z"] = float(cmd_val.get("angular.z", 0.0))
+
+        # Always push base features to history (cheap; keeps deque current
+        # even when temporal features are off, so enabling them mid-session
+        # works immediately without a warm-up gap).
+        _FEATURE_HISTORY.append(dict(feature_dict))
+
+        # Temporal features: diff1, mean5, std5 over the rolling window.
+        # Mirrors add_temporal_features() in ml_pipeline/utils/common.py.
+        # Note: training drops the first row (diff1=NaN); here we use 0.0
+        # instead so inference never stalls waiting for a full window.
+        if _USE_TEMPORAL_FEATURES:
+            for col in list(feature_dict.keys()):
+                vals = [
+                    h[col] for h in _FEATURE_HISTORY
+                    if col in h and h[col] is not None
+                ]
+                n = len(vals)
+                feature_dict[f"{col}_diff1"] = (
+                    float(vals[-1] - vals[-2]) if n >= 2 else 0.0
+                )
+                mean = sum(vals) / n if n else 0.0
+                feature_dict[f"{col}_mean5"] = float(mean)
+                variance = (
+                    sum((v - mean) ** 2 for v in vals) / n if n >= 2 else 0.0
+                )
+                feature_dict[f"{col}_std5"] = float(variance ** 0.5)
+
         # Create a single-row DataFrame with all features
         result_df = pl.DataFrame([feature_dict])
-
-        # Note: Temporal features (diff1, mean5, std5) are not added here
-        # Use a model trained without temporal_features=false
-        # To support temporal features, maintain a buffer of past samples
 
         return result_df.lazy()
 
